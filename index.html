@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Being Juice | POS & Inventory Engine</title>
+  <!-- Supabase Browser SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --primary: #1e3a2b;       /* Deep Botanical Forest Green */
+      --primary-hover: #2a523d;
+      --accent: #d87d4a;        /* Cold-Pressed Citrus Accent */
+      --accent-hover: #be6939;
+      --bg: #f9f8f5;            /* Natural Warm Stone White */
+      --card: #ffffff;
+      --border: #e8e6e1;
+      --text: #1a1a1a;
+      --text-muted: #64748b;
+      --danger: #e11d48;
+      --success: #15803d;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      padding-bottom: 14px;
+      border-bottom: 2px solid var(--border);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .brand-container { display: flex; align-items: baseline; gap: 8px; }
+    .brand { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; color: var(--primary); text-transform: uppercase; }
+    .brand-tag { font-size: 0.75rem; font-weight: 600; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; }
+
+    .nav-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+    .nav-tabs button {
+      padding: 8px 14px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      cursor: pointer;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: var(--text);
+      transition: all 0.15s ease;
+    }
+    .nav-tabs button.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+      box-shadow: 0 2px 4px rgba(30, 58, 43, 0.15);
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* POS Screen */
+    .pos-grid { display: grid; grid-template-columns: 1fr 360px; gap: 20px; }
+    @media (max-width: 900px) {
+      .pos-grid { grid-template-columns: 1fr; }
+    }
+
+    .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+    .drink-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: left;
+      cursor: pointer;
+      transition: transform 0.1s ease, border-color 0.1s ease, box-shadow 0.1s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 120px;
+    }
+    .drink-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--primary);
+      box-shadow: 0 6px 14px rgba(0,0,0,0.04);
+    }
+    .drink-card .cat { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+    .drink-card h4 { font-size: 0.95rem; font-weight: 700; line-height: 1.3; color: var(--primary); }
+    .drink-card .price { font-size: 1.1rem; font-weight: 800; color: var(--text); margin-top: 10px; }
+
+    /* Cart */
+    .cart-pane {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      height: fit-content;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+    }
+    .cart-pane input, .admin-box input, .admin-box select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.9rem;
+      background: #fdfdfc;
+    }
+    .cart-items { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 12px 0; max-height: 250px; overflow-y: auto; }
+    .cart-item { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; }
+    
+    .btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.15s ease;
+    }
+    .btn:hover { background: var(--primary-hover); }
+    .btn-accent { background: var(--accent); }
+    .btn-accent:hover { background: var(--accent-hover); }
+    .btn-danger { background: var(--danger); }
+    .btn-sm { padding: 6px 10px; font-size: 0.8rem; }
+
+    /* Admin Panels & Tables */
+    .admin-layout { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+    .admin-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+    .admin-box h3 { font-size: 1rem; color: var(--primary); margin-bottom: 12px; }
+    
+    table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 8px; overflow: hidden; margin-top: 8px; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+    th { background: #f3f2ee; color: var(--text); font-weight: 700; }
+
+    /* Modal */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(2px); align-items: center; justify-content: center; z-index: 100; }
+    .modal-box { background: var(--card); padding: 22px; border-radius: 12px; width: 360px; border: 1px solid var(--border); max-width: 90vw; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand-container">
+      <div class="brand">Being Juice</div>
+      <div class="brand-tag">Counter Terminal</div>
+    </div>
+    <div class="nav-tabs">
+      <button class="active" onclick="switchTab('pos')">Barista POS</button>
+      <button onclick="switchTab('feedback')">Drink Feedback</button>
+      <button onclick="switchTab('admin-menu')">Menu Admin</button>
+      <button onclick="switchTab('admin-inventory')">Grocery Inward</button>
+    </div>
+  </header>
+
+  <!-- 1. COUNTER POS -->
+  <section id="pos-view" class="view active">
+    <div class="pos-grid">
+      <div>
+        <h3 style="margin-bottom: 12px; font-size: 1.1rem; color: var(--primary);">Drink Catalog</h3>
+        <div class="menu-grid" id="pos-menu-container">Connecting to Supabase...</div>
+      </div>
+
+      <div class="cart-pane">
+        <h3 style="color: var(--primary); font-size: 1.1rem;">Active Ticket</h3>
+        <input type="text" id="cust-name" placeholder="Customer Name (Optional)" />
+        <input type="tel" id="cust-phone" placeholder="Phone Number (Required)" />
+        
+        <div class="cart-items" id="cart-list">Cart is currently empty</div>
+        
+        <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 1.1rem; padding: 4px 0;">
+          <span>Total Payable:</span>
+          <span id="cart-total-amt">₹0</span>
+        </div>
+        <button class="btn btn-accent" style="width: 100%; padding: 14px; font-size: 1rem;" onclick="placeOrder()">
+          Complete Order & Settle
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. DRINK FEEDBACK -->
+  <section id="feedback-view" class="view">
+    <div class="admin-box">
+      <h3>Recent Orders Drink Feedback</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Drink Name</th>
+            <th style="width: 90px;">Rating (1-5)</th>
+            <th>Customer Review / Taste Notes</th>
+            <th style="width: 100px;">Action</th>
+          </tr>
+        </thead>
+        <tbody id="feedback-table-body">
+          <tr><td colspan="4">Loading items...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 3. MENU ADMIN (Add/Remove Drinks & Recipe BOM) -->
+  <section id="admin-menu-view" class="view">
+    <div class="admin-layout">
+      <div class="admin-box">
+        <h3>Create Drink Item</h3>
+        <input type="text" id="new-drink-name" placeholder="Drink Name (e.g. Pure Green Detox)" />
+        <input type="number" id="new-drink-price" placeholder="Base Price in ₹" />
+        <input type="text" id="new-drink-cat" placeholder="Category (e.g. Glow & Beauty, Immunity)" />
+        <button class="btn" onclick="addNewDrink()">Add Drink to Menu</button>
+      </div>
+
+      <div class="admin-box">
+        <h3>Build Recipe (Bill of Materials)</h3>
+        <select id="recipe-drink-select"><option value="">Select Drink</option></select>
+        <select id="recipe-inv-select"><option value="">Select Inventory Ingredient</option></select>
+        <input type="number" id="recipe-qty" placeholder="Qty per Drink (e.g. 150 for g/ml, 1 for bottle)" />
+        <button class="btn" onclick="linkRecipeItem()">Attach to Drink Recipe</button>
+      </div>
+    </div>
+
+    <div class="admin-box">
+      <h3>Menu Formulations & Pricing</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Drink Name</th>
+            <th>Category</th>
+            <th>Price</th>
+            <th>Recipe Deduction Matrix</th>
+            <th style="width: 80px;">Action</th>
+          </tr>
+        </thead>
+        <tbody id="admin-menu-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 4. GROCERY INWARD & INVENTORY -->
+  <section id="admin-inventory-view" class="view">
+    <div class="admin-layout">
+      <div class="admin-box">
+        <h3>Record Bulk Grocery Inward (Restock)</h3>
+        <select id="inward-inv-select"><option value="">Select Ingredient</option></select>
+        <input type="number" id="inward-qty" placeholder="Quantity Inwarded (e.g. 20000 for 20kg)" />
+        <input type="number" id="inward-cost" placeholder="Total Cost in ₹ (Optional)" />
+        <input type="text" id="inward-notes" placeholder="Batch / Vendor Note" />
+        <button class="btn btn-accent" onclick="recordGroceryInward()">Restock Balance</button>
+      </div>
+
+      <div class="admin-box">
+        <h3>Add Raw Ingredient / Packaging Master</h3>
+        <input type="text" id="new-inv-name" placeholder="Name (e.g. Meyer Lemons, 350ml Bottle)" />
+        <select id="new-inv-unit">
+          <option value="g">Grams (g)</option>
+          <option value="ml">Milliliters (ml)</option>
+          <option value="pcs">Pieces (pcs)</option>
+        </select>
+        <button class="btn" onclick="addNewIngredientMaster()">Create Master SKU</button>
+      </div>
+    </div>
+
+    <div class="admin-box">
+      <h3>Live Warehouse & Counter Balance</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Raw Ingredient / Item</th>
+            <th>Current Stock</th>
+            <th>Unit</th>
+            <th>Inventory State</th>
+          </tr>
+        </thead>
+        <tbody id="inventory-table-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ADDON SELECTION MODAL -->
+  <div class="modal" id="addon-modal">
+    <div class="modal-box">
+      <h3 id="modal-drink-title" style="color: var(--primary); margin-bottom: 12px;">Customize Drink</h3>
+      <div id="modal-addons-list" style="margin-bottom: 16px;"></div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn" style="flex: 1;" onclick="confirmAddToCart()">Add to Ticket</button>
+        <button class="btn" style="background: var(--text-muted);" onclick="closeModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // 1. SUPABASE CREDENTIALS (REPLACE THESE)
+    // ==========================================
+    const SUPABASE_URL = "YOUR_SUPABASE_URL";
+    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+    const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let state = {
+      drinks: [],
+      addons: [],
+      inventory: [],
+      cart: [],
+      selectedDrink: null
+    };
+
+    async function init() {
+      await refreshAllData();
+      renderPOSMenu();
+    }
+
+    async function refreshAllData() {
+      const [d, a, i] = await Promise.all([
+        client.from('drinks').select('*, recipe_items(*, inventory(*))'),
+        client.from('addons').select('*'),
+        client.from('inventory').select('*').order('name')
+      ]);
+      state.drinks = d.data || [];
+      state.addons = a.data || [];
+      state.inventory = i.data || [];
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.nav-tabs button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+
+      if (tab === 'pos') {
+        document.getElementById('pos-view').classList.add('active');
+        renderPOSMenu();
+      } else if (tab === 'feedback') {
+        document.getElementById('feedback-view').classList.add('active');
+        loadFeedbackItems();
+      } else if (tab === 'admin-menu') {
+        document.getElementById('admin-menu-view').classList.add('active');
+        renderAdminMenu();
+      } else if (tab === 'admin-inventory') {
+        document.getElementById('admin-inventory-view').classList.add('active');
+        renderInventoryModule();
+      }
+      event.target.classList.add('active');
+    }
+
+    // --- POS & ORDER MODULE ---
+    function renderPOSMenu() {
+      const container = document.getElementById('pos-menu-container');
+      if (!state.drinks.length) {
+        container.innerHTML = '<p style="color:var(--text-muted);">No drinks found in database. Seed drinks via Supabase or Menu Admin.</p>';
+        return;
+      }
+      container.innerHTML = state.drinks.map(d => `
+        <div class="drink-card" onclick="openAddonModal('${d.id}')">
+          <div>
+            <div class="cat">${d.category || 'Cold Pressed'}</div>
+            <h4>${d.name}</h4>
+          </div>
+          <div class="price">₹${d.base_price}</div>
+        </div>
+      `).join('');
+    }
+
+    function openAddonModal(id) {
+      state.selectedDrink = state.drinks.find(d => d.id === id);
+      document.getElementById('modal-drink-title').innerText = `Addons: ${state.selectedDrink.name}`;
+      const container = document.getElementById('modal-addons-list');
+      container.innerHTML = state.addons.map(a => `
+        <div style="display:flex; justify-content:space-between; margin-bottom: 8px; font-size:0.9rem;">
+          <label style="cursor:pointer;">
+            <input type="checkbox" value="${a.id}" data-name="${a.name}" data-price="${a.price}"> ${a.name}
+          </label>
+          <span style="font-weight:600;">+₹${a.price}</span>
+        </div>
+      `).join('');
+      document.getElementById('addon-modal').style.display = 'flex';
+    }
+
+    function closeModal() {
+      document.getElementById('addon-modal').style.display = 'none';
+      state.selectedDrink = null;
+    }
+
+    function confirmAddToCart() {
+      const checkedBoxes = document.querySelectorAll('#modal-addons-list input:checked');
+      const selected = Array.from(checkedBoxes).map(b => ({
+        id: b.value,
+        name: b.dataset.name,
+        price: parseFloat(b.dataset.price)
+      }));
+
+      const addonTotal = selected.reduce((s, a) => s + a.price, 0);
+      state.cart.push({
+        drink_id: state.selectedDrink.id,
+        name: state.selectedDrink.name,
+        addons: selected,
+        price: state.selectedDrink.base_price + addonTotal
+      });
+
+      closeModal();
+      renderCart();
+    }
+
+    function renderCart() {
+      const container = document.getElementById('cart-list');
+      if (!state.cart.length) {
+        container.innerHTML = '<span style="color:var(--text-muted); font-size:0.9rem;">Cart is currently empty</span>';
+        document.getElementById('cart-total-amt').innerText = '₹0';
+        return;
+      }
+      let total = 0;
+      container.innerHTML = state.cart.map((item, idx) => {
+        total += item.price;
+        return `
+          <div class="cart-item">
+            <div>
+              <strong>${item.name}</strong>
+              ${item.addons.length ? `<br><small style="color:var(--text-muted);">+ ${item.addons.map(a => a.name).join(', ')}</small>` : ''}
+            </div>
+            <div>
+              <span>₹${item.price}</span>
+              <button onclick="removeFromCart(${idx})" style="background:none; border:none; color:var(--danger); cursor:pointer; margin-left:6px;">×</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('cart-total-amt').innerText = `₹${total}`;
+    }
+
+    function removeFromCart(idx) {
+      state.cart.splice(idx, 1);
+      renderCart();
+    }
+
+    async function placeOrder() {
+      if (!state.cart.length) return alert('Ticket is empty.');
+      const phone = document.getElementById('cust-phone').value.trim();
+      const name = document.getElementById('cust-name').value.trim();
+      if (!phone) return alert('Customer phone number is required for feedback and record-keeping.');
+
+      // 1. Customer Upsert
+      let customerId = null;
+      const { data: cust } = await client.from('customers').select('id').eq('phone', phone).single();
+      if (cust) {
+        customerId = cust.id;
+      } else {
+        const { data: newC, error: cErr } = await client.from('customers').insert({ name: name || 'Valued Customer', phone }).select().single();
+        if (cErr) return alert('Customer error: ' + cErr.message);
+        customerId = newC?.id;
+      }
+
+      // 2. Order Record
+      const total = state.cart.reduce((s, i) => s + i.price, 0);
+      const { data: order, error: oErr } = await client.from('orders').insert({
+        customer_id: customerId,
+        total_amount: total,
+        payment_method: 'UPI/Direct'
+      }).select().single();
+
+      if (oErr) return alert('Order error: ' + oErr.message);
+
+      // 3. Order Items (Supabase database trigger automatically deducts recipe BOM)
+      const items = state.cart.map(c => ({
+        order_id: order.id,
+        drink_id: c.drink_id,
+        drink_name: c.name,
+        selected_addons: c.addons,
+        price: c.price
+      }));
+      
+      const { error: iErr } = await client.from('order_items').insert(items);
+      if (iErr) return alert('Order items error: ' + iErr.message);
+
+      alert('Order Placed Successfully! Stock automatically deducted.');
+      state.cart = [];
+      document.getElementById('cust-name').value = '';
+      document.getElementById('cust-phone').value = '';
+      renderCart();
+      await refreshAllData();
+    }
+
+    // --- MENU ADMIN ---
+    function renderAdminMenu() {
+      document.getElementById('recipe-drink-select').innerHTML = '<option value="">Select Drink</option>' +
+        state.drinks.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+      document.getElementById('recipe-inv-select').innerHTML = '<option value="">Select Inventory Ingredient</option>' +
+        state.inventory.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
+
+      const tbody = document.getElementById('admin-menu-body');
+      tbody.innerHTML = state.drinks.map(d => {
+        const recipeDesc = (d.recipe_items || []).map(r => `${r.inventory?.name}: ${r.qty_required}${r.inventory?.unit}`).join(', ') || 'No formulation set';
+        return `
+          <tr>
+            <td><strong>${d.name}</strong></td>
+            <td>${d.category || '-'}</td>
+            <td>₹${d.base_price}</td>
+            <td><small style="color:var(--text-muted);">${recipeDesc}</small></td>
+            <td>
+              <button class="btn btn-danger btn-sm" onclick="deleteDrink('${d.id}')">Remove</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function addNewDrink() {
+      const name = document.getElementById('new-drink-name').value.trim();
+      const price = parseFloat(document.getElementById('new-drink-price').value);
+      const category = document.getElementById('new-drink-cat').value.trim();
+      if (!name || isNaN(price)) return alert('Enter valid drink name and base price.');
+
+      await client.from('drinks').insert({ name, base_price: price, category });
+      document.getElementById('new-drink-name').value = '';
+      document.getElementById('new-drink-price').value = '';
+      await refreshAllData();
+      renderAdminMenu();
+    }
+
+    async function deleteDrink(id) {
+      if (!confirm('Permanently remove this drink from the menu?')) return;
+      await client.from('drinks').delete().eq('id', id);
+      await refreshAllData();
+      renderAdminMenu();
+    }
+
+    async function linkRecipeItem() {
+      const drink_id = document.getElementById('recipe-drink-select').value;
+      const inventory_id = document.getElementById('recipe-inv-select').value;
+      const qty_required = parseFloat(document.getElementById('recipe-qty').value);
+      if (!drink_id || !inventory_id || isNaN(qty_required)) return alert('Select drink, ingredient, and quantity.');
+
+      await client.from('recipe_items').insert({ drink_id, inventory_id, qty_required });
+      alert('Ingredient linked to formulation!');
+      document.getElementById('recipe-qty').value = '';
+      await refreshAllData();
+      renderAdminMenu();
+    }
+
+    // --- INVENTORY MODULE ---
+    function renderInventoryModule() {
+      document.getElementById('inward-inv-select').innerHTML = '<option value="">Select Ingredient</option>' +
+        state.inventory.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
+
+      const tbody = document.getElementById('inventory-table-body');
+      tbody.innerHTML = state.inventory.map(i => `
+        <tr>
+          <td><strong>${i.name}</strong></td>
+          <td>${i.stock_qty}</td>
+          <td>${i.unit}</td>
+          <td>${i.stock_qty < 1000 ? '<span style="color:var(--danger); font-weight:700;">LOW STOCK</span>' : '<span style="color:var(--success); font-weight:600;">HEALTHY</span>'}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function recordGroceryInward() {
+      const inventory_id = document.getElementById('inward-inv-select').value;
+      const qty_added = parseFloat(document.getElementById('inward-qty').value);
+      const cost_price = parseFloat(document.getElementById('inward-cost').value) || 0;
+      const vendor_notes = document.getElementById('inward-notes').value.trim();
+
+      if (!inventory_id || isNaN(qty_added)) return alert('Select ingredient and enter inward quantity.');
+
+      // Inward trigger automatically increments the inventory balance
+      await client.from('grocery_inward').insert({ inventory_id, qty_added, cost_price, vendor_notes });
+      alert('Grocery recorded! Live warehouse stock updated.');
+      document.getElementById('inward-qty').value = '';
+      document.getElementById('inward-cost').value = '';
+      await refreshAllData();
+      renderInventoryModule();
+    }
+
+    async function addNewIngredientMaster() {
+      const name = document.getElementById('new-inv-name').value.trim();
+      const unit = document.getElementById('new-inv-unit').value;
+      if (!name) return alert('Enter ingredient name.');
+
+      await client.from('inventory').insert({ name, unit, stock_qty: 0 });
+      document.getElementById('new-inv-name').value = '';
+      await refreshAllData();
+      renderInventoryModule();
+    }
+
+    // --- FEEDBACK MODULE ---
+    async function loadFeedbackItems() {
+      const { data } = await client.from('order_items').select('*').order('id', { ascending: false }).limit(15);
+      const tbody = document.getElementById('feedback-table-body');
+      if (!data || !data.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-muted);">No orders recorded yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.map(row => `
+        <tr>
+          <td><strong>${row.drink_name}</strong></td>
+          <td><input type="number" min="1" max="5" value="${row.feedback_rating || 5}" id="rate-${row.id}" style="width:55px; padding:6px; border:1px solid var(--border); border-radius:4px;"></td>
+          <td><input type="text" placeholder="e.g. Too sweet, needs more ginger..." value="${row.feedback_comment || ''}" id="comment-${row.id}" style="width:100%; padding:6px; border:1px solid var(--border); border-radius:4px;"></td>
+          <td><button class="btn btn-sm" onclick="saveFeedback('${row.id}')">Save</button></td>
+        </tr>
+      `).join('');
+    }
+
+    async function saveFeedback(id) {
+      const rating = document.getElementById(`rate-${id}`).value;
+      const comment = document.getElementById(`comment-${id}`).value;
+      await client.from('order_items').update({ feedback_rating: parseInt(rating), feedback_comment: comment }).eq('id', id);
+      alert('Drink feedback saved!');
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
