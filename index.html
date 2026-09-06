@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Being Juice | POS & Inventory Engine</title>
-  <!-- Supabase Browser SDK -->
+  <title>Being Juice | Terminal & Operations Hub</title>
+  <!-- Supabase & Chart.js via CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --primary: #1e3a2b;       /* Deep Botanical Forest Green */
@@ -21,23 +22,34 @@
       --success: #15803d;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }
-    body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 14px; min-height: 100vh; }
 
+    /* Auth Banner / Header */
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 18px;
-      padding-bottom: 14px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
       border-bottom: 2px solid var(--border);
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 10px;
     }
-
     .brand-container { display: flex; align-items: baseline; gap: 8px; }
-    .brand { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; color: var(--primary); text-transform: uppercase; }
+    .brand { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.5px; color: var(--primary); text-transform: uppercase; }
     .brand-tag { font-size: 0.75rem; font-weight: 600; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; }
+
+    .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #eeebe3;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
 
     .nav-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
     .nav-tabs button {
@@ -49,113 +61,153 @@
       font-weight: 600;
       font-size: 0.85rem;
       color: var(--text);
-      transition: all 0.15s ease;
     }
     .nav-tabs button.active {
       background: var(--primary);
       color: white;
       border-color: var(--primary);
-      box-shadow: 0 2px 4px rgba(30, 58, 43, 0.15);
     }
 
     .view { display: none; }
     .view.active { display: block; }
 
-    /* POS Screen */
-    .pos-grid { display: grid; grid-template-columns: 1fr 360px; gap: 20px; }
-    @media (max-width: 900px) {
-      .pos-grid { grid-template-columns: 1fr; }
-    }
-
-    .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+    /* POS UI */
+    .pos-grid { display: grid; grid-template-columns: 1fr 360px; gap: 18px; }
+    @media (max-width: 900px) { .pos-grid { grid-template-columns: 1fr; } }
+    .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
     .drink-card {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 16px;
-      text-align: left;
+      padding: 14px;
       cursor: pointer;
-      transition: transform 0.1s ease, border-color 0.1s ease, box-shadow 0.1s ease;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      min-height: 120px;
+      min-height: 110px;
     }
-    .drink-card:hover {
-      transform: translateY(-2px);
-      border-color: var(--primary);
-      box-shadow: 0 6px 14px rgba(0,0,0,0.04);
-    }
-    .drink-card .cat { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
-    .drink-card h4 { font-size: 0.95rem; font-weight: 700; line-height: 1.3; color: var(--primary); }
-    .drink-card .price { font-size: 1.1rem; font-weight: 800; color: var(--text); margin-top: 10px; }
+    .drink-card:hover { border-color: var(--primary); transform: translateY(-2px); }
+    .drink-card .cat { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; color: var(--accent); }
+    .drink-card h4 { font-size: 0.95rem; font-weight: 700; color: var(--primary); margin: 4px 0; }
+    .drink-card .price { font-size: 1.05rem; font-weight: 800; }
 
-    /* Cart */
     .cart-pane {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 18px;
+      padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
       height: fit-content;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.02);
     }
     .cart-pane input, .admin-box input, .admin-box select {
       width: 100%;
-      padding: 10px 12px;
+      padding: 9px 12px;
       border: 1px solid var(--border);
       border-radius: 6px;
       font-size: 0.9rem;
       background: #fdfdfc;
     }
-    .cart-items { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 12px 0; max-height: 250px; overflow-y: auto; }
-    .cart-item { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; }
-    
+    .cart-items { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 10px 0; max-height: 220px; overflow-y: auto; }
+    .cart-item { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 8px; }
+
     .btn {
       background: var(--primary);
       color: white;
       border: none;
-      padding: 10px 16px;
+      padding: 9px 14px;
       border-radius: 6px;
       font-weight: 700;
       cursor: pointer;
-      font-size: 0.9rem;
-      transition: background 0.15s ease;
+      font-size: 0.85rem;
     }
     .btn:hover { background: var(--primary-hover); }
     .btn-accent { background: var(--accent); }
     .btn-accent:hover { background: var(--accent-hover); }
     .btn-danger { background: var(--danger); }
-    .btn-sm { padding: 6px 10px; font-size: 0.8rem; }
+    .btn-sm { padding: 5px 8px; font-size: 0.75rem; }
+
+    /* Infographics & Analytics Dashboard */
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 16px; }
+    .kpi-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: center; }
+    .kpi-card .num { font-size: 1.8rem; font-weight: 800; color: var(--primary); margin: 6px 0; }
+    .kpi-card .lbl { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); }
+
+    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .chart-container { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; position: relative; }
+    .chart-container h4 { margin-bottom: 10px; font-size: 0.95rem; color: var(--primary); }
 
     /* Admin Panels & Tables */
-    .admin-layout { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
-    .admin-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 18px; }
-    .admin-box h3 { font-size: 1rem; color: var(--primary); margin-bottom: 12px; }
-    
-    table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 8px; overflow: hidden; margin-top: 8px; }
-    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
-    th { background: #f3f2ee; color: var(--text); font-weight: 700; }
+    .admin-layout { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+    .admin-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    .admin-box h3 { font-size: 0.95rem; color: var(--primary); margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 8px; margin-top: 8px; }
+    th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+    th { background: #f3f2ee; font-weight: 700; }
 
-    /* Modal */
-    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(2px); align-items: center; justify-content: center; z-index: 100; }
-    .modal-box { background: var(--card); padding: 22px; border-radius: 12px; width: 360px; border: 1px solid var(--border); max-width: 90vw; }
+    /* Modals & Login Wall */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); align-items: center; justify-content: center; z-index: 100; }
+    .modal-box { background: var(--card); padding: 22px; border-radius: 12px; width: 340px; border: 1px solid var(--border); max-width: 90vw; }
+
+    #login-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      z-index: 999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-card {
+      background: white;
+      border: 1px solid var(--border);
+      padding: 28px;
+      border-radius: 12px;
+      width: 350px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+      text-align: center;
+    }
   </style>
 </head>
 <body>
 
+  <!-- AUTH / LOGIN OVERLAY -->
+  <div id="login-overlay">
+    <div class="login-card">
+      <div class="brand" style="margin-bottom: 4px;">Being Juice</div>
+      <div class="brand-tag" style="margin-bottom: 18px;">Counter Authentication</div>
+
+      <select id="staff-select" style="width:100%; padding:10px; margin-bottom:12px; border:1px solid var(--border); border-radius:6px;">
+        <option value="">Select Staff Member...</option>
+      </select>
+
+      <input type="password" id="staff-pin" placeholder="Enter 4-Digit PIN or Admin Code" style="width:100%; padding:10px; margin-bottom:14px; border:1px solid var(--border); border-radius:6px; text-align:center; letter-spacing:4px; font-size:1.2rem;" />
+
+      <button class="btn btn-accent" style="width:100%; padding:12px;" onclick="attemptLogin()">Clock In / Access</button>
+      <div id="login-error" style="color:var(--danger); font-size:0.8rem; margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <!-- HEADER -->
   <header>
     <div class="brand-container">
       <div class="brand">Being Juice</div>
-      <div class="brand-tag">Counter Terminal</div>
+      <div class="brand-tag">Terminal</div>
     </div>
-    <div class="nav-tabs">
+
+    <div class="nav-tabs" id="nav-tabs-container">
       <button class="active" onclick="switchTab('pos')">Barista POS</button>
-      <button onclick="switchTab('feedback')">Drink Feedback</button>
-      <button onclick="switchTab('admin-menu')">Menu Admin</button>
-      <button onclick="switchTab('admin-inventory')">Grocery Inward</button>
+      <button onclick="switchTab('feedback')">Feedback</button>
+      <!-- Admin Only Tabs -->
+      <button class="admin-only" onclick="switchTab('reports')">Daily Infographics</button>
+      <button class="admin-only" onclick="switchTab('admin-menu')">Menu & BOM</button>
+      <button class="admin-only" onclick="switchTab('admin-inventory')">Grocery & Staff</button>
+    </div>
+
+    <div class="user-pill">
+      <span id="current-user-label">Barista Arjun</span>
+      <button onclick="logout()" style="border:none; background:transparent; color:var(--danger); cursor:pointer; font-weight:700;">Logout</button>
     </div>
   </header>
 
@@ -163,69 +215,108 @@
   <section id="pos-view" class="view active">
     <div class="pos-grid">
       <div>
-        <h3 style="margin-bottom: 12px; font-size: 1.1rem; color: var(--primary);">Drink Catalog</h3>
-        <div class="menu-grid" id="pos-menu-container">Connecting to Supabase...</div>
+        <h3 style="margin-bottom: 10px; font-size: 1.05rem; color: var(--primary);">Quick Beverage Catalog</h3>
+        <div class="menu-grid" id="pos-menu-container">Loading catalog...</div>
       </div>
 
       <div class="cart-pane">
-        <h3 style="color: var(--primary); font-size: 1.1rem;">Active Ticket</h3>
+        <h3 style="color: var(--primary); font-size: 1.05rem;">Active Ticket</h3>
         <input type="text" id="cust-name" placeholder="Customer Name (Optional)" />
-        <input type="tel" id="cust-phone" placeholder="Phone Number (Required)" />
+        <input type="tel" id="cust-phone" placeholder="Customer Phone (Required)" />
         
-        <div class="cart-items" id="cart-list">Cart is currently empty</div>
+        <div class="cart-items" id="cart-list">Cart empty</div>
         
         <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 1.1rem; padding: 4px 0;">
-          <span>Total Payable:</span>
+          <span>Total:</span>
           <span id="cart-total-amt">₹0</span>
         </div>
-        <button class="btn btn-accent" style="width: 100%; padding: 14px; font-size: 1rem;" onclick="placeOrder()">
-          Complete Order & Settle
+        <button class="btn btn-accent" style="width: 100%; padding: 12px; font-size: 1rem;" onclick="placeOrder()">
+          Settle Order & Auto-Deplete
         </button>
       </div>
     </div>
   </section>
 
-  <!-- 2. DRINK FEEDBACK -->
+  <!-- 2. DAILY INFOGRAPHICS & REPORTS (ADMIN ONLY) -->
+  <section id="reports-view" class="view">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <h3 style="color:var(--primary);">Today's Executive Infographic & Yield</h3>
+      <input type="date" id="report-date-picker" onchange="renderReports()" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px;">
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="lbl">Today's Revenue</div>
+        <div class="num" id="kpi-rev">₹0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="lbl">Total Drinks Sold</div>
+        <div class="num" id="kpi-drinks">0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="lbl">Average Drink Rating</div>
+        <div class="num" id="kpi-rating">--</div>
+      </div>
+      <div class="kpi-card">
+        <div class="lbl">Produce Depleted</div>
+        <div class="num" id="kpi-depleted">0 kg</div>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="chart-container">
+        <h4>Top Performing Juices</h4>
+        <canvas id="chartTopDrinks"></canvas>
+      </div>
+      <div class="chart-container">
+        <h4>Customer Feedback Distribution</h4>
+        <canvas id="chartFeedback"></canvas>
+      </div>
+      <div class="chart-container" style="grid-column: 1 / -1;">
+        <h4>Hourly Revenue Trajectory</h4>
+        <canvas id="chartHourlySales"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. FEEDBACK MODULE -->
   <section id="feedback-view" class="view">
     <div class="admin-box">
-      <h3>Recent Orders Drink Feedback</h3>
+      <h3>Customer Drink Feedback Log</h3>
       <table>
         <thead>
           <tr>
             <th>Drink Name</th>
-            <th style="width: 90px;">Rating (1-5)</th>
+            <th style="width: 80px;">Rating (1-5)</th>
             <th>Customer Review / Taste Notes</th>
-            <th style="width: 100px;">Action</th>
+            <th style="width: 90px;">Action</th>
           </tr>
         </thead>
-        <tbody id="feedback-table-body">
-          <tr><td colspan="4">Loading items...</td></tr>
-        </tbody>
+        <tbody id="feedback-table-body"></tbody>
       </table>
     </div>
   </section>
 
-  <!-- 3. MENU ADMIN (Add/Remove Drinks & Recipe BOM) -->
+  <!-- 4. MENU ADMIN (Add/Remove Drinks & Recipe BOM) -->
   <section id="admin-menu-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
-        <h3>Create Drink Item</h3>
+        <h3>Create Menu Item</h3>
         <input type="text" id="new-drink-name" placeholder="Drink Name (e.g. Pure Green Detox)" />
         <input type="number" id="new-drink-price" placeholder="Base Price in ₹" />
-        <input type="text" id="new-drink-cat" placeholder="Category (e.g. Glow & Beauty, Immunity)" />
-        <button class="btn" onclick="addNewDrink()">Add Drink to Menu</button>
+        <input type="text" id="new-drink-cat" placeholder="Category (e.g. Detox, Vitality)" />
+        <button class="btn" onclick="addNewDrink()">Add to Drink List</button>
       </div>
 
       <div class="admin-box">
-        <h3>Build Recipe (Bill of Materials)</h3>
+        <h3>Link Ingredients (Recipe BOM)</h3>
         <select id="recipe-drink-select"><option value="">Select Drink</option></select>
-        <select id="recipe-inv-select"><option value="">Select Inventory Ingredient</option></select>
-        <input type="number" id="recipe-qty" placeholder="Qty per Drink (e.g. 150 for g/ml, 1 for bottle)" />
-        <button class="btn" onclick="linkRecipeItem()">Attach to Drink Recipe</button>
+        <select id="recipe-inv-select"><option value="">Select Ingredient</option></select>
+        <input type="number" id="recipe-qty" placeholder="Qty per Drink (g / ml / pcs)" />
+        <button class="btn" onclick="linkRecipeItem()">Attach Ingredient</button>
       </div>
     </div>
-const SUPABASE_URL = "https://pyhtaokoaykjyodesvnm.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5aHRhb2tvYXlranlvZGVzdm5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2ODk2MjksImV4cCI6MjEwNDI2NTYyOX0.4rkTzdxwC8o_DDwnulg-exv2xb30LI5RxE0nZqkojH8";
+
     <div class="admin-box">
       <h3>Menu Formulations & Pricing</h3>
       <table>
@@ -234,8 +325,8 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
             <th>Drink Name</th>
             <th>Category</th>
             <th>Price</th>
-            <th>Recipe Deduction Matrix</th>
-            <th style="width: 80px;">Action</th>
+            <th>BOM Recipe</th>
+            <th style="width: 70px;">Action</th>
           </tr>
         </thead>
         <tbody id="admin-menu-body"></tbody>
@@ -243,39 +334,41 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     </div>
   </section>
 
-  <!-- 4. GROCERY INWARD & INVENTORY -->
+  <!-- 5. GROCERY, INVENTORY & STAFF -->
   <section id="admin-inventory-view" class="view">
     <div class="admin-layout">
+      <!-- Inward Grocery -->
       <div class="admin-box">
-        <h3>Record Bulk Grocery Inward (Restock)</h3>
+        <h3>Record Grocery Bulk Inward</h3>
         <select id="inward-inv-select"><option value="">Select Ingredient</option></select>
-        <input type="number" id="inward-qty" placeholder="Quantity Inwarded (e.g. 20000 for 20kg)" />
-        <input type="number" id="inward-cost" placeholder="Total Cost in ₹ (Optional)" />
+        <input type="number" id="inward-qty" placeholder="Quantity Inwarded (e.g. 15000 for 15kg)" />
+        <input type="number" id="inward-cost" placeholder="Cost in ₹ (Optional)" />
         <input type="text" id="inward-notes" placeholder="Batch / Vendor Note" />
-        <button class="btn btn-accent" onclick="recordGroceryInward()">Restock Balance</button>
+        <button class="btn btn-accent" onclick="recordGroceryInward()">Restock Warehouse</button>
       </div>
 
+      <!-- Staff Management -->
       <div class="admin-box">
-        <h3>Add Raw Ingredient / Packaging Master</h3>
-        <input type="text" id="new-inv-name" placeholder="Name (e.g. Meyer Lemons, 350ml Bottle)" />
-        <select id="new-inv-unit">
-          <option value="g">Grams (g)</option>
-          <option value="ml">Milliliters (ml)</option>
-          <option value="pcs">Pieces (pcs)</option>
+        <h3>Add Barista / Staff Account</h3>
+        <input type="text" id="new-staff-name" placeholder="Barista Name" />
+        <select id="new-staff-role">
+          <option value="barista">Barista</option>
+          <option value="admin">Store Admin</option>
         </select>
-        <button class="btn" onclick="addNewIngredientMaster()">Create Master SKU</button>
+        <input type="password" id="new-staff-pin" placeholder="4-Digit PIN" />
+        <button class="btn" onclick="addNewStaffMember()">Create Account</button>
       </div>
     </div>
 
     <div class="admin-box">
-      <h3>Live Warehouse & Counter Balance</h3>
+      <h3>Live Inventory Balance</h3>
       <table>
         <thead>
           <tr>
-            <th>Raw Ingredient / Item</th>
-            <th>Current Stock</th>
+            <th>Ingredient</th>
+            <th>Balance</th>
             <th>Unit</th>
-            <th>Inventory State</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody id="inventory-table-body"></tbody>
@@ -283,11 +376,11 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     </div>
   </section>
 
-  <!-- ADDON SELECTION MODAL -->
+  <!-- ADDON MODAL -->
   <div class="modal" id="addon-modal">
     <div class="modal-box">
       <h3 id="modal-drink-title" style="color: var(--primary); margin-bottom: 12px;">Customize Drink</h3>
-      <div id="modal-addons-list" style="margin-bottom: 16px;"></div>
+      <div id="modal-addons-list" style="margin-bottom: 14px;"></div>
       <div style="display: flex; gap: 8px;">
         <button class="btn" style="flex: 1;" onclick="confirmAddToCart()">Add to Ticket</button>
         <button class="btn" style="background: var(--text-muted);" onclick="closeModal()">Cancel</button>
@@ -296,14 +389,14 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   </div>
 
   <script>
-    // ==========================================
-    // 1. SUPABASE CREDENTIALS (REPLACE THESE)
-    // ==========================================
-    const SUPABASE_URL = "YOUR_SUPABASE_URL";
-    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+    // SUPABASE CREDENTIALS
+    const SUPABASE_URL = "https://pyhtaokoaykjyodesvnm.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5aHRhb2tvYXlranlvZGVzdm5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2ODk2MjksImV4cCI6MjEwNDI2NTYyOX0.4rkTzdxwC8o_DDwnulg-exv2xb30LI5RxE0nZqkojH8";
     const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let state = {
+      currentUser: null,
+      staffList: [],
       drinks: [],
       addons: [],
       inventory: [],
@@ -311,9 +404,52 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       selectedDrink: null
     };
 
+    let charts = {};
+
     async function init() {
-      await refreshAllData();
-      renderPOSMenu();
+      await loadStaff();
+      // Set default report date picker to today
+      document.getElementById('report-date-picker').value = new Date().toISOString().split('T')[0];
+    }
+
+    // --- AUTHENTICATION MODULE ---
+    async function loadStaff() {
+      const { data } = await client.from('staff').select('*').eq('active', true);
+      state.staffList = data || [];
+      const select = document.getElementById('staff-select');
+      select.innerHTML = '<option value="">Select Staff Member...</option>' +
+        state.staffList.map(s => `<option value="${s.id}">${s.name} (${s.role.toUpperCase()})</option>`).join('');
+    }
+
+    function attemptLogin() {
+      const staffId = document.getElementById('staff-select').value;
+      const pin = document.getElementById('staff-pin').value.trim();
+      const errorDiv = document.getElementById('login-error');
+
+      const staff = state.staffList.find(s => s.id === staffId);
+      if (!staff || staff.pin !== pin) {
+        errorDiv.innerText = "Invalid Staff Member or PIN.";
+        return;
+      }
+
+      state.currentUser = staff;
+      document.getElementById('login-overlay').style.display = 'none';
+      document.getElementById('current-user-label').innerText = `${staff.name} (${staff.role.toUpperCase()})`;
+
+      // Toggle Admin Visibility
+      const adminTabs = document.querySelectorAll('.admin-only');
+      adminTabs.forEach(tab => {
+        tab.style.display = (staff.role === 'admin') ? 'inline-block' : 'none';
+      });
+
+      refreshAllData().then(() => renderPOSMenu());
+    }
+
+    function logout() {
+      state.currentUser = null;
+      document.getElementById('staff-pin').value = '';
+      document.getElementById('login-overlay').style.display = 'flex';
+      switchTab('pos');
     }
 
     async function refreshAllData() {
@@ -337,6 +473,9 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       } else if (tab === 'feedback') {
         document.getElementById('feedback-view').classList.add('active');
         loadFeedbackItems();
+      } else if (tab === 'reports') {
+        document.getElementById('reports-view').classList.add('active');
+        renderReports();
       } else if (tab === 'admin-menu') {
         document.getElementById('admin-menu-view').classList.add('active');
         renderAdminMenu();
@@ -347,13 +486,9 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       event.target.classList.add('active');
     }
 
-    // --- POS & ORDER MODULE ---
+    // --- POS MODULE ---
     function renderPOSMenu() {
       const container = document.getElementById('pos-menu-container');
-      if (!state.drinks.length) {
-        container.innerHTML = '<p style="color:var(--text-muted);">No drinks found in database. Seed drinks via Supabase or Menu Admin.</p>';
-        return;
-      }
       container.innerHTML = state.drinks.map(d => `
         <div class="drink-card" onclick="openAddonModal('${d.id}')">
           <div>
@@ -370,10 +505,8 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       document.getElementById('modal-drink-title').innerText = `Addons: ${state.selectedDrink.name}`;
       const container = document.getElementById('modal-addons-list');
       container.innerHTML = state.addons.map(a => `
-        <div style="display:flex; justify-content:space-between; margin-bottom: 8px; font-size:0.9rem;">
-          <label style="cursor:pointer;">
-            <input type="checkbox" value="${a.id}" data-name="${a.name}" data-price="${a.price}"> ${a.name}
-          </label>
+        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+          <label><input type="checkbox" value="${a.id}" data-name="${a.name}" data-price="${a.price}"> ${a.name}</label>
           <span style="font-weight:600;">+₹${a.price}</span>
         </div>
       `).join('');
@@ -408,7 +541,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     function renderCart() {
       const container = document.getElementById('cart-list');
       if (!state.cart.length) {
-        container.innerHTML = '<span style="color:var(--text-muted); font-size:0.9rem;">Cart is currently empty</span>';
+        container.innerHTML = 'Cart empty';
         document.getElementById('cart-total-amt').innerText = '₹0';
         return;
       }
@@ -440,30 +573,28 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       if (!state.cart.length) return alert('Ticket is empty.');
       const phone = document.getElementById('cust-phone').value.trim();
       const name = document.getElementById('cust-name').value.trim();
-      if (!phone) return alert('Customer phone number is required for feedback and record-keeping.');
+      if (!phone) return alert('Customer phone number is required.');
 
-      // 1. Customer Upsert
       let customerId = null;
       const { data: cust } = await client.from('customers').select('id').eq('phone', phone).single();
       if (cust) {
         customerId = cust.id;
       } else {
-        const { data: newC, error: cErr } = await client.from('customers').insert({ name: name || 'Valued Customer', phone }).select().single();
-        if (cErr) return alert('Customer error: ' + cErr.message);
+        const { data: newC } = await client.from('customers').insert({ name: name || 'Valued Customer', phone }).select().single();
         customerId = newC?.id;
       }
 
-      // 2. Order Record
       const total = state.cart.reduce((s, i) => s + i.price, 0);
       const { data: order, error: oErr } = await client.from('orders').insert({
         customer_id: customerId,
         total_amount: total,
-        payment_method: 'UPI/Direct'
+        payment_method: 'UPI',
+        barista_id: state.currentUser.id,
+        barista_name: state.currentUser.name
       }).select().single();
 
-      if (oErr) return alert('Order error: ' + oErr.message);
+      if (oErr) return alert(oErr.message);
 
-      // 3. Order Items (Supabase database trigger automatically deducts recipe BOM)
       const items = state.cart.map(c => ({
         order_id: order.id,
         drink_id: c.drink_id,
@@ -471,11 +602,10 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
         selected_addons: c.addons,
         price: c.price
       }));
-      
-      const { error: iErr } = await client.from('order_items').insert(items);
-      if (iErr) return alert('Order items error: ' + iErr.message);
 
-      alert('Order Placed Successfully! Stock automatically deducted.');
+      await client.from('order_items').insert(items);
+
+      alert(`Order billed by ${state.currentUser.name}! Inventory updated.`);
       state.cart = [];
       document.getElementById('cust-name').value = '';
       document.getElementById('cust-phone').value = '';
@@ -483,11 +613,94 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       await refreshAllData();
     }
 
+    // --- DAILY INFOGRAPHICS & ANALYTICS ---
+    async function renderReports() {
+      const selectedDate = document.getElementById('report-date-picker').value;
+      const start = new Date(`${selectedDate}T00:00:00.000Z`).toISOString();
+      const end = new Date(`${selectedDate}T23:59:59.999Z`).toISOString();
+
+      // Fetch Orders for Selected Day
+      const { data: dayOrders } = await client.from('orders').select('*, order_items(*)').gte('created_at', start).lte('created_at', end);
+      const orders = dayOrders || [];
+
+      // Calculate KPI Aggregates
+      const totalRev = orders.reduce((s, o) => s + parseFloat(o.total_amount), 0);
+      let totalDrinks = 0;
+      let drinkCounts = {};
+      let ratingSum = 0;
+      let ratingCount = 0;
+      let ratingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+      let hourlyBuckets = Array(24).fill(0);
+
+      orders.forEach(o => {
+        const hour = new Date(o.created_at).getHours();
+        hourlyBuckets[hour] += parseFloat(o.total_amount);
+
+        (o.order_items || []).forEach(item => {
+          totalDrinks++;
+          drinkCounts[item.drink_name] = (drinkCounts[item.drink_name] || 0) + 1;
+          if (item.feedback_rating) {
+            ratingSum += item.feedback_rating;
+            ratingCount++;
+            ratingDistribution[item.feedback_rating]++;
+          }
+        });
+      });
+
+      document.getElementById('kpi-rev').innerText = `₹${totalRev.toLocaleString()}`;
+      document.getElementById('kpi-drinks').innerText = totalDrinks;
+      document.getElementById('kpi-rating').innerText = ratingCount ? (ratingSum / ratingCount).toFixed(1) + ' ★' : 'No ratings';
+      document.getElementById('kpi-depleted').innerText = (totalDrinks * 0.35).toFixed(1) + ' kg est.';
+
+      // Chart 1: Top Drinks (Bar)
+      if (charts.topDrinks) charts.topDrinks.destroy();
+      const topLabels = Object.keys(drinkCounts);
+      const topData = Object.values(drinkCounts);
+      charts.topDrinks = new Chart(document.getElementById('chartTopDrinks'), {
+        type: 'bar',
+        data: {
+          labels: topLabels.length ? topLabels : ['No Sales'],
+          datasets: [{ data: topData.length ? topData : [0], backgroundColor: '#1e3a2b' }]
+        },
+        options: { plugins: { legend: { display: false } } }
+      });
+
+      // Chart 2: Feedback Rating Distribution (Doughnut)
+      if (charts.feedback) charts.feedback.destroy();
+      charts.feedback = new Chart(document.getElementById('chartFeedback'), {
+        type: 'doughnut',
+        data: {
+          labels: ['1 Star', '2 Star', '3 Star', '4 Star', '5 Star'],
+          datasets: [{
+            data: [ratingDistribution[1], ratingDistribution[2], ratingDistribution[3], ratingDistribution[4], ratingDistribution[5]],
+            backgroundColor: ['#ef4444', '#f97316', '#eab308', '#84cc16', '#10b981']
+          }]
+        }
+      });
+
+      // Chart 3: Hourly Sales (Line)
+      if (charts.hourly) charts.hourly.destroy();
+      charts.hourly = new Chart(document.getElementById('chartHourlySales'), {
+        type: 'line',
+        data: {
+          labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+          datasets: [{
+            label: 'Sales (₹)',
+            data: hourlyBuckets,
+            borderColor: '#d87d4a',
+            backgroundColor: 'rgba(216, 125, 74, 0.1)',
+            fill: true,
+            tension: 0.3
+          }]
+        }
+      });
+    }
+
     // --- MENU ADMIN ---
     function renderAdminMenu() {
       document.getElementById('recipe-drink-select').innerHTML = '<option value="">Select Drink</option>' +
         state.drinks.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
-      document.getElementById('recipe-inv-select').innerHTML = '<option value="">Select Inventory Ingredient</option>' +
+      document.getElementById('recipe-inv-select').innerHTML = '<option value="">Select Ingredient</option>' +
         state.inventory.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
 
       const tbody = document.getElementById('admin-menu-body');
@@ -499,9 +712,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
             <td>${d.category || '-'}</td>
             <td>₹${d.base_price}</td>
             <td><small style="color:var(--text-muted);">${recipeDesc}</small></td>
-            <td>
-              <button class="btn btn-danger btn-sm" onclick="deleteDrink('${d.id}')">Remove</button>
-            </td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteDrink('${d.id}')">Remove</button></td>
           </tr>
         `;
       }).join('');
@@ -511,7 +722,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       const name = document.getElementById('new-drink-name').value.trim();
       const price = parseFloat(document.getElementById('new-drink-price').value);
       const category = document.getElementById('new-drink-cat').value.trim();
-      if (!name || isNaN(price)) return alert('Enter valid drink name and base price.');
+      if (!name || isNaN(price)) return alert('Name and Price required.');
 
       await client.from('drinks').insert({ name, base_price: price, category });
       document.getElementById('new-drink-name').value = '';
@@ -521,7 +732,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     }
 
     async function deleteDrink(id) {
-      if (!confirm('Permanently remove this drink from the menu?')) return;
+      if (!confirm('Delete drink from menu?')) return;
       await client.from('drinks').delete().eq('id', id);
       await refreshAllData();
       renderAdminMenu();
@@ -531,16 +742,16 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       const drink_id = document.getElementById('recipe-drink-select').value;
       const inventory_id = document.getElementById('recipe-inv-select').value;
       const qty_required = parseFloat(document.getElementById('recipe-qty').value);
-      if (!drink_id || !inventory_id || isNaN(qty_required)) return alert('Select drink, ingredient, and quantity.');
+      if (!drink_id || !inventory_id || isNaN(qty_required)) return alert('All recipe fields required.');
 
       await client.from('recipe_items').insert({ drink_id, inventory_id, qty_required });
-      alert('Ingredient linked to formulation!');
+      alert('Ingredient attached to formulation!');
       document.getElementById('recipe-qty').value = '';
       await refreshAllData();
       renderAdminMenu();
     }
 
-    // --- INVENTORY MODULE ---
+    // --- INVENTORY & STAFF MODULE ---
     function renderInventoryModule() {
       document.getElementById('inward-inv-select').innerHTML = '<option value="">Select Ingredient</option>' +
         state.inventory.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
@@ -551,7 +762,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
           <td><strong>${i.name}</strong></td>
           <td>${i.stock_qty}</td>
           <td>${i.unit}</td>
-          <td>${i.stock_qty < 1000 ? '<span style="color:var(--danger); font-weight:700;">LOW STOCK</span>' : '<span style="color:var(--success); font-weight:600;">HEALTHY</span>'}</td>
+          <td>${i.stock_qty < 1000 ? '<span style="color:var(--danger); font-weight:700;">LOW</span>' : '<span style="color:var(--success); font-weight:600;">OK</span>'}</td>
         </tr>
       `).join('');
     }
@@ -562,41 +773,37 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       const cost_price = parseFloat(document.getElementById('inward-cost').value) || 0;
       const vendor_notes = document.getElementById('inward-notes').value.trim();
 
-      if (!inventory_id || isNaN(qty_added)) return alert('Select ingredient and enter inward quantity.');
+      if (!inventory_id || isNaN(qty_added)) return alert('Select ingredient and enter quantity.');
 
-      // Inward trigger automatically increments the inventory balance
       await client.from('grocery_inward').insert({ inventory_id, qty_added, cost_price, vendor_notes });
-      alert('Grocery recorded! Live warehouse stock updated.');
+      alert('Grocery Restocked!');
       document.getElementById('inward-qty').value = '';
-      document.getElementById('inward-cost').value = '';
       await refreshAllData();
       renderInventoryModule();
     }
 
-    async function addNewIngredientMaster() {
-      const name = document.getElementById('new-inv-name').value.trim();
-      const unit = document.getElementById('new-inv-unit').value;
-      if (!name) return alert('Enter ingredient name.');
+    async function addNewStaffMember() {
+      const name = document.getElementById('new-staff-name').value.trim();
+      const role = document.getElementById('new-staff-role').value;
+      const pin = document.getElementById('new-staff-pin').value.trim();
 
-      await client.from('inventory').insert({ name, unit, stock_qty: 0 });
-      document.getElementById('new-inv-name').value = '';
-      await refreshAllData();
-      renderInventoryModule();
+      if (!name || !pin) return alert('Name and PIN required.');
+      await client.from('staff').insert({ name, role, pin });
+      alert('Staff member registered!');
+      document.getElementById('new-staff-name').value = '';
+      document.getElementById('new-staff-pin').value = '';
+      await loadStaff();
     }
 
     // --- FEEDBACK MODULE ---
     async function loadFeedbackItems() {
       const { data } = await client.from('order_items').select('*').order('id', { ascending: false }).limit(15);
       const tbody = document.getElementById('feedback-table-body');
-      if (!data || !data.length) {
-        tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-muted);">No orders recorded yet.</td></tr>';
-        return;
-      }
-      tbody.innerHTML = data.map(row => `
+      tbody.innerHTML = (data || []).map(row => `
         <tr>
           <td><strong>${row.drink_name}</strong></td>
-          <td><input type="number" min="1" max="5" value="${row.feedback_rating || 5}" id="rate-${row.id}" style="width:55px; padding:6px; border:1px solid var(--border); border-radius:4px;"></td>
-          <td><input type="text" placeholder="e.g. Too sweet, needs more ginger..." value="${row.feedback_comment || ''}" id="comment-${row.id}" style="width:100%; padding:6px; border:1px solid var(--border); border-radius:4px;"></td>
+          <td><input type="number" min="1" max="5" value="${row.feedback_rating || 5}" id="rate-${row.id}" style="width:50px; padding:4px;"></td>
+          <td><input type="text" placeholder="Taste feedback..." value="${row.feedback_comment || ''}" id="comment-${row.id}" style="width:100%; padding:4px;"></td>
           <td><button class="btn btn-sm" onclick="saveFeedback('${row.id}')">Save</button></td>
         </tr>
       `).join('');
@@ -606,7 +813,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       const rating = document.getElementById(`rate-${id}`).value;
       const comment = document.getElementById(`comment-${id}`).value;
       await client.from('order_items').update({ feedback_rating: parseInt(rating), feedback_comment: comment }).eq('id', id);
-      alert('Drink feedback saved!');
+      alert('Feedback recorded!');
     }
 
     window.onload = init;
