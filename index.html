@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Being Juice | Gamified Barista Hub & Admin</title>
+  <title>Being Juice | Master Terminal & Kitchen OS</title>
 
-  <!-- Supabase, Chart.js, Canvas-Confetti, XLSX via CDN -->
+  <!-- External CDNs -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
@@ -13,26 +13,23 @@
 
   <style>
     :root {
-      --primary: #105634;       /* Lush Forest Green */
-      --primary-light: #1b8a53;
-      --accent: #ff6b35;        /* Juicy Citrus Orange */
-      --accent-glow: #ffa27b;
-      --yellow: #f7c544;        /* Sunshine Cold-Pressed Yellow */
-      --berry: #9a1f40;         /* Beetroot & Acai Red */
-      --bg: #f5f8f5;            /* Ultra-clean Mint Stone */
+      --primary: #105634;
+      --primary-hover: #1b8a53;
+      --accent: #ff6b35;
+      --accent-hover: #be6939;
+      --bg: #f5f8f5;
       --card: #ffffff;
       --border: #e0e9e1;
       --text: #172b20;
       --text-muted: #647a6d;
       --danger: #ef4444;
       --success: #16a34a;
-      --shadow: 0 8px 20px rgba(16, 86, 52, 0.08);
+      --shadow: 0 8px 24px rgba(16, 86, 52, 0.08);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background: var(--bg); color: var(--text); padding: 14px; min-height: 100vh; }
 
-    /* Gamified Header */
     header {
       display: flex;
       justify-content: space-between;
@@ -44,24 +41,24 @@
       border: 1px solid var(--border);
       box-shadow: var(--shadow);
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 10px;
     }
 
     .brand-container { display: flex; align-items: baseline; gap: 8px; }
-    .brand { font-size: 1.5rem; font-weight: 900; letter-spacing: -0.5px; color: var(--primary); text-transform: uppercase; }
-    .brand-tag { font-size: 0.75rem; font-weight: 700; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; background: #fff0e6; padding: 3px 8px; border-radius: 20px; }
+    .brand { font-size: 1.45rem; font-weight: 900; letter-spacing: -0.5px; color: var(--primary); text-transform: uppercase; }
+    .brand-tag { font-size: 0.72rem; font-weight: 800; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; background: #fff0e6; padding: 3px 8px; border-radius: 20px; }
 
     .nav-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
     .nav-tabs button {
-      padding: 9px 16px;
+      padding: 8px 14px;
       border: 1px solid var(--border);
       background: var(--bg);
       cursor: pointer;
       border-radius: 10px;
       font-weight: 700;
-      font-size: 0.85rem;
+      font-size: 0.83rem;
       color: var(--text);
-      transition: all 0.15s ease;
+      transition: all 0.15s;
     }
     .nav-tabs button.active {
       background: var(--primary);
@@ -117,17 +114,16 @@
       justify-content: space-between;
       box-shadow: 0 4px 12px rgba(0,0,0,0.03);
       transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
-      position: relative;
     }
-    .drink-card:hover { transform: translateY(-4px); border-color: var(--primary); box-shadow: var(--shadow); }
-    .drink-img-wrap { width: 100%; height: 130px; background: #eef4f0; overflow: hidden; position: relative; }
+    .drink-card:hover { transform: translateY(-3px); border-color: var(--primary); box-shadow: var(--shadow); }
+    .drink-img-wrap { width: 100%; height: 130px; background: #eef4f0; overflow: hidden; }
     .drink-img { width: 100%; height: 100%; object-fit: cover; }
     .drink-info { padding: 12px; display: flex; flex-direction: column; gap: 4px; }
     .drink-cat { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; color: var(--accent); }
     .drink-title { font-size: 0.95rem; font-weight: 800; color: var(--text); line-height: 1.25; }
     .drink-price { font-size: 1.15rem; font-weight: 900; color: var(--primary); margin-top: 6px; }
 
-    /* Cart & Checkout */
+    /* Cart */
     .cart-pane {
       background: var(--card);
       border: 1px solid var(--border);
@@ -141,13 +137,13 @@
     }
     .cart-pane input, .admin-box input, .admin-box select {
       width: 100%;
-      padding: 10px 14px;
+      padding: 10px 12px;
       border: 1px solid var(--border);
       border-radius: 8px;
       font-size: 0.9rem;
       background: #fdfdfc;
     }
-    .cart-items { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 10px 0; max-height: 240px; overflow-y: auto; }
+    .cart-items { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 10px 0; max-height: 250px; overflow-y: auto; }
     .cart-item { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 8px; }
 
     /* Buttons */
@@ -159,47 +155,49 @@
       border-radius: 8px;
       font-weight: 800;
       cursor: pointer;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       transition: all 0.15s ease;
     }
-    .btn:hover { background: var(--primary-light); }
+    .btn:hover { background: var(--primary-hover); }
     .btn-accent { background: var(--accent); }
     .btn-accent:hover { background: var(--accent-hover); }
     .btn-danger { background: var(--danger); }
     .btn-sm { padding: 6px 10px; font-size: 0.78rem; border-radius: 6px; }
 
-    /* Gamified Modal */
+    /* Modals */
     .modal { display: none; position: fixed; inset: 0; background: rgba(16, 86, 52, 0.4); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 100; }
-    .modal-box { background: var(--card); padding: 24px; border-radius: 18px; width: 440px; border: 1px solid var(--border); max-width: 92vw; box-shadow: 0 15px 35px rgba(0,0,0,0.15); animation: popIn 0.18s ease; }
-    @keyframes popIn { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal-box { background: var(--card); padding: 22px; border-radius: 16px; width: 450px; border: 1px solid var(--border); max-width: 92vw; box-shadow: 0 15px 35px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
 
-    /* Payment Mode Buttons */
-    .pay-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0; }
-    .pay-opt-btn {
-      padding: 14px 6px;
-      border-radius: 12px;
+    /* Toppings Selection Cards in Modal */
+    .toppings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+    .topping-card {
       border: 2px solid var(--border);
-      background: white;
+      border-radius: 12px;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
       cursor: pointer;
-      font-weight: 800;
-      font-size: 0.88rem;
-      text-align: center;
       transition: 0.15s;
     }
-    .pay-opt-btn.active { border-color: var(--accent); background: #fff5ee; color: var(--accent); }
+    .topping-card.selected { border-color: var(--accent); background: #fff8f5; }
+    .topping-img { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; }
 
-    /* Feedback Stars */
-    .star-bar { display: flex; gap: 8px; margin: 8px 0; }
-    .star-btn { font-size: 1.6rem; cursor: pointer; border: none; background: none; filter: grayscale(1); transition: 0.1s; }
-    .star-btn.active { filter: grayscale(0); transform: scale(1.15); }
+    /* Multi-ingredient BOM builder table */
+    .bom-row { display: grid; grid-template-columns: 2fr 1fr 40px; gap: 8px; margin-bottom: 8px; align-items: center; }
 
-    /* Sales History & Admin Tables */
+    /* Admin Panels */
     .admin-layout { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
     .admin-box { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
     .admin-box h3 { font-size: 1rem; color: var(--primary); margin-bottom: 12px; font-weight: 800; }
     table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 10px; margin-top: 10px; overflow: hidden; }
     th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
     th { background: #eef4f0; font-weight: 800; color: var(--primary); }
+
+    /* Star rating */
+    .star-bar { display: flex; gap: 8px; margin: 8px 0; }
+    .star-btn { font-size: 1.6rem; cursor: pointer; border: none; background: none; filter: grayscale(1); transition: 0.1s; }
+    .star-btn.active { filter: grayscale(0); transform: scale(1.15); }
 
     /* Login Screen */
     #login-overlay { position: fixed; inset: 0; background: linear-gradient(135deg, #105634, #ff6b35); z-index: 999; display: flex; align-items: center; justify-content: center; }
@@ -232,30 +230,30 @@
     <div class="nav-tabs">
       <button class="active" onclick="switchTab('pos')">🍹 Barista POS</button>
       <button onclick="switchTab('history')">📜 Sales History</button>
-      <!-- Admin Only Tabs -->
       <button class="admin-only" onclick="switchTab('reports')">📊 Infographics</button>
-      <button class="admin-only" onclick="switchTab('admin-menu')">🍍 Menu & BOM</button>
+      <button class="admin-only" onclick="switchTab('admin-menu')">🍍 Menu & Drinks</button>
+      <button class="admin-only" onclick="switchTab('admin-toppings')">🫐 Toppings Admin</button>
+      <button class="admin-only" onclick="switchTab('admin-bom')">🧪 Multi-BOM Builder</button>
       <button class="admin-only" onclick="switchTab('admin-inventory')">📦 Grocery Inward</button>
       <button class="admin-only" onclick="switchTab('admin-users')">👥 Staff CRM</button>
       <button class="admin-only" onclick="switchTab('admin-bulk')">📑 Bulk Excel</button>
     </div>
 
     <div class="user-pill">
-      <span id="current-user-label">Barista Arjun</span>
+      <span id="current-user-label">Barista</span>
       <button onclick="logout()" style="border:none; background:transparent; color:var(--danger); cursor:pointer; font-weight:800;">✕</button>
     </div>
   </header>
 
   <!-- 1. BARISTA POS -->
   <section id="pos-view" class="view active">
-    <!-- Category Pill Filter -->
     <div class="category-scroll" id="cat-pill-container">
       <button class="cat-btn active" onclick="filterCategory('ALL')">All Blends</button>
     </div>
 
     <div class="pos-grid">
       <div>
-        <div class="menu-grid" id="pos-menu-container">Connecting...</div>
+        <div class="menu-grid" id="pos-menu-container">Loading cold-pressed juices...</div>
       </div>
 
       <div class="cart-pane">
@@ -276,7 +274,7 @@
     </div>
   </section>
 
-  <!-- 2. SALES HISTORY & RECEIPT LOOKUP -->
+  <!-- 2. SALES HISTORY -->
   <section id="history-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -286,11 +284,11 @@
       <table>
         <thead>
           <tr>
-            <th>Receipt / ID</th>
+            <th>Receipt</th>
             <th>Barista</th>
             <th>Total Amount</th>
-            <th>Payment Mode</th>
-            <th>Items Ordered</th>
+            <th>Payment</th>
+            <th>Drinks & Toppings</th>
             <th>Time</th>
           </tr>
         </thead>
@@ -299,7 +297,7 @@
     </div>
   </section>
 
-  <!-- 3. DAILY INFOGRAPHICS (ADMIN) -->
+  <!-- 3. INFOGRAPHICS (ADMIN) -->
   <section id="reports-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -333,32 +331,22 @@
     </div>
   </section>
 
-  <!-- 4. MENU & BOM (ADMIN) + RETRIEVE DRINKS -->
+  <!-- 4. MENU ADMIN (ADD / EDIT DRINK WITH IMAGE UPLOAD) -->
   <section id="admin-menu-view" class="view">
     <div class="admin-layout">
-      <!-- Create Drink -->
       <div class="admin-box">
-        <h3>Create Drink Item</h3>
-        <input type="text" id="new-drink-name" placeholder="Drink Name (e.g. Cleanse Shot)" />
+        <h3>Create / Add Drink</h3>
+        <input type="text" id="new-drink-name" placeholder="Drink Name" />
         <input type="number" id="new-drink-price" placeholder="Base Price (₹)" />
-        <input type="text" id="new-drink-cat" placeholder="Category (e.g. Detox, Energy)" />
-        <input type="text" id="new-drink-img" placeholder="Direct Image URL (Unsplash, etc.)" />
-        <button class="btn" onclick="addNewDrink()">Add to Drink List</button>
-      </div>
-
-      <!-- Build BOM -->
-      <div class="admin-box">
-        <h3>Build Recipe BOM</h3>
-        <select id="recipe-drink-select"><option value="">Select Drink</option></select>
-        <select id="recipe-inv-select"><option value="">Select Inventory Item</option></select>
-        <input type="number" id="recipe-qty" placeholder="Qty per Drink (g / ml / pcs)" />
-        <button class="btn" onclick="linkRecipeItem()">Attach Ingredient</button>
+        <input type="text" id="new-drink-cat" placeholder="Category (e.g. Detox, Vitality)" />
+        <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:4px;">Upload Drink Image:</label>
+        <input type="file" id="new-drink-file" accept="image/*" />
+        <button class="btn btn-accent" style="margin-top:10px;" onclick="addNewDrink()">Add to Menu</button>
       </div>
     </div>
 
-    <!-- Active & Archived Drinks -->
     <div class="admin-box">
-      <h3>Active & Retrievable Drinks</h3>
+      <h3>Active Drink Formulations</h3>
       <table>
         <thead>
           <tr>
@@ -367,7 +355,7 @@
             <th>Price</th>
             <th>Category</th>
             <th>Status</th>
-            <th>Action (Archive / Retrieve)</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody id="admin-menu-body"></tbody>
@@ -375,15 +363,57 @@
     </div>
   </section>
 
-  <!-- 5. GROCERY INWARD (ADMIN) -->
+  <!-- 5. TOPPINGS ADMIN (ADD / UPLOAD IMAGE) -->
+  <section id="admin-toppings-view" class="view">
+    <div class="admin-layout">
+      <div class="admin-box">
+        <h3>Add New Topping / Booster</h3>
+        <input type="text" id="new-top-name" placeholder="Topping Name (e.g. Boba Pearls)" />
+        <input type="number" id="new-top-price" placeholder="Extra Price (₹)" />
+        <select id="new-top-inv-select"><option value="">Select Linked Inventory Item</option></select>
+        <input type="number" id="new-top-qty" placeholder="Inventory Qty Deducted (e.g. 30g)" />
+        <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:4px;">Topping Image:</label>
+        <input type="file" id="new-top-file" accept="image/*" />
+        <button class="btn btn-accent" style="margin-top:10px;" onclick="addNewTopping()">Save Topping</button>
+      </div>
+    </div>
+
+    <div class="admin-box">
+      <h3>Available Toppings</h3>
+      <table>
+        <thead>
+          <tr><th>Image</th><th>Name</th><th>Price</th><th>Linked Ingredient</th><th>Qty Used</th><th>Action</th></tr>
+        </thead>
+        <tbody id="admin-toppings-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 6. MULTI-INGREDIENT BOM BUILDER -->
+  <section id="admin-bom-view" class="view">
+    <div class="admin-box" style="max-width:700px;">
+      <h3>Multi-Ingredient Recipe BOM Formulation</h3>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Select a drink and add multiple ingredients with their deduction quantities in one save.</p>
+      
+      <select id="multi-bom-drink-select" onchange="loadExistingDrinkBOM()"><option value="">Choose Drink...</option></select>
+
+      <div id="bom-rows-container" style="margin:14px 0;"></div>
+
+      <button class="btn btn-sm" onclick="addBOMRow()">+ Add Ingredient Row</button>
+      <button class="btn btn-accent" style="float:right;" onclick="saveMultiBOM()">Save Complete Recipe BOM</button>
+      <div style="clear:both;"></div>
+    </div>
+  </section>
+
+  <!-- 7. GROCERY INWARD (ADMIN) -->
   <section id="admin-inventory-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
-        <h3>Record Bulk Grocery Purchase</h3>
+        <h3>Record Bulk Grocery Inward</h3>
         <select id="inward-inv-select"><option value="">Select Ingredient</option></select>
-        <input type="number" id="inward-qty" placeholder="Qty Inwarded (e.g. 10000 for 10kg)" />
+        <input type="number" id="inward-qty" placeholder="Quantity Inwarded (e.g. 15000 for 15kg)" />
         <input type="number" id="inward-cost" placeholder="Cost in ₹ (Optional)" />
-        <input type="text" id="inward-notes" placeholder="Batch / Vendor" />
+        <input type="text" id="inward-notes" placeholder="Batch / Vendor Note" />
         <button class="btn btn-accent" onclick="recordGroceryInward()">Restock Warehouse</button>
       </div>
       <div class="admin-box">
@@ -409,7 +439,7 @@
     </div>
   </section>
 
-  <!-- 6. USER / STAFF MANAGEMENT (ADMIN) -->
+  <!-- 8. USER MANAGEMENT -->
   <section id="admin-users-view" class="view">
     <div class="admin-box" style="max-width:550px;">
       <h3>Register New Staff Member</h3>
@@ -425,32 +455,25 @@
     <div class="admin-box">
       <h3>Active Staff Members</h3>
       <table>
-        <thead>
-          <tr><th>Name</th><th>Role</th><th>PIN</th><th>Active</th><th>Action</th></tr>
-        </thead>
+        <thead><tr><th>Name</th><th>Role</th><th>PIN</th><th>Active</th><th>Action</th></tr></thead>
         <tbody id="staff-table-body"></tbody>
       </table>
     </div>
   </section>
 
-  <!-- 7. BULK EXCEL UPLOADER (ADMIN) -->
+  <!-- 9. BULK EXCEL -->
   <section id="admin-bulk-view" class="view">
     <div class="admin-layout">
-      <!-- Bulk Menu -->
       <div class="admin-box">
         <h3>Bulk Menu Excel Upload</h3>
-        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">Columns: <code>name, base_price, category, image_url</code></p>
         <button class="btn btn-sm" onclick="downloadSampleExcel('drinks')">Download Sample Drinks Excel</button>
         <div style="margin-top:12px;">
           <input type="file" id="excel-drinks-file" accept=".xlsx, .xls" />
           <button class="btn btn-accent" onclick="uploadBulkDrinks()">Upload Drinks</button>
         </div>
       </div>
-
-      <!-- Bulk Inventory -->
       <div class="admin-box">
         <h3>Bulk Inventory Excel Upload</h3>
-        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">Columns: <code>name, stock_qty, unit</code></p>
         <button class="btn btn-sm" onclick="downloadSampleExcel('inventory')">Download Sample Ingredients Excel</button>
         <div style="margin-top:12px;">
           <input type="file" id="excel-inv-file" accept=".xlsx, .xls" />
@@ -460,14 +483,35 @@
     </div>
   </section>
 
-  <!-- MODAL: ADDONS -->
+  <!-- MODAL: TOPPINGS & ADDONS PICKER -->
   <div class="modal" id="addon-modal">
     <div class="modal-box">
-      <h3 id="modal-drink-title" style="color:var(--primary); font-size:1.15rem; margin-bottom:12px;">Customize Drink</h3>
-      <div id="modal-addons-list" style="margin-bottom:16px;"></div>
-      <div style="display:flex; gap:8px;">
-        <button class="btn" style="flex:1;" onclick="confirmAddToCart()">Add to Order</button>
+      <h3 id="modal-drink-title" style="color:var(--primary); font-size:1.15rem;">Select Toppings & Boosters</h3>
+      <p style="font-size:0.8rem; color:var(--text-muted);">Tap toppings to add into blend.</p>
+      
+      <div class="toppings-grid" id="modal-toppings-list"></div>
+
+      <div style="display:flex; gap:8px; margin-top:14px;">
+        <button class="btn" style="flex:1;" onclick="confirmAddToCart()">Add to Ticket</button>
         <button class="btn" style="background:#8f9e95;" onclick="closeModal('addon-modal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT DRINK -->
+  <div class="modal" id="edit-drink-modal">
+    <div class="modal-box">
+      <h3 style="color:var(--primary); margin-bottom:12px;">Edit Drink Item</h3>
+      <input type="hidden" id="edit-drink-id" />
+      <input type="text" id="edit-drink-name" placeholder="Drink Name" />
+      <input type="number" id="edit-drink-price" placeholder="Base Price" />
+      <input type="text" id="edit-drink-cat" placeholder="Category" />
+      <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:4px;">Replace Image (Optional):</label>
+      <input type="file" id="edit-drink-file" accept="image/*" />
+
+      <div style="display:flex; gap:8px; margin-top:14px;">
+        <button class="btn btn-accent" style="flex:1;" onclick="saveEditedDrink()">Save Changes</button>
+        <button class="btn" style="background:#8f9e95;" onclick="closeModal('edit-drink-modal')">Cancel</button>
       </div>
     </div>
   </div>
@@ -478,13 +522,12 @@
       <h3 style="color:var(--primary); font-size:1.2rem;">Settle Order</h3>
       <div style="font-size:1.6rem; font-weight:900; color:var(--accent); margin:8px 0;" id="pay-modal-total">₹0</div>
 
-      <div class="pay-grid">
-        <button class="pay-opt-btn active" id="pay-opt-UPI" onclick="selectPayMode('UPI')">📱 UPI / QR</button>
-        <button class="pay-opt-btn" id="pay-opt-CARD" onclick="selectPayMode('CARD')">💳 Card</button>
-        <button class="pay-opt-btn" id="pay-opt-CASH" onclick="selectPayMode('CASH')">💵 Cash</button>
+      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin:12px 0;">
+        <button class="btn pay-opt-btn" id="pay-opt-UPI" onclick="selectPayMode('UPI')">📱 UPI</button>
+        <button class="btn pay-opt-btn" id="pay-opt-CARD" onclick="selectPayMode('CARD')">💳 Card</button>
+        <button class="btn pay-opt-btn" id="pay-opt-CASH" onclick="selectPayMode('CASH')">💵 Cash</button>
       </div>
 
-      <!-- Cash Calculator -->
       <div id="cash-calc-pane" style="display:none; background:#f5f8f5; padding:12px; border-radius:10px; margin-bottom:12px;">
         <label style="font-size:0.8rem; font-weight:800;">Cash Tendered (₹):</label>
         <input type="number" id="cash-received" placeholder="e.g. 500" oninput="calculateChange()" style="font-size:1.1rem; font-weight:800;" />
@@ -495,24 +538,23 @@
       </div>
 
       <div style="display:flex; gap:8px; margin-top:14px;">
-        <button class="btn btn-accent" style="flex:1; padding:14px;" onclick="finalizeOrder()">Confirm Payment & Settle</button>
+        <button class="btn btn-accent" style="flex:1; padding:14px;" onclick="finalizeOrder()">Confirm & Settle</button>
         <button class="btn" style="background:#8f9e95;" onclick="closeModal('payment-modal')">Cancel</button>
       </div>
     </div>
   </div>
 
-  <!-- MODAL: GAMIFIED FEEDBACK DIALOG -->
+  <!-- MODAL: FEEDBACK -->
   <div class="modal" id="feedback-modal">
-    <div class="modal-box" style="max-height:85vh; overflow-y:auto;">
+    <div class="modal-box">
       <h3 style="color:var(--primary); font-size:1.25rem;">Rate Your Juices! 🌟</h3>
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Capture immediate customer taste reaction.</p>
-      <div id="feedback-drinks-list"></div>
+      <div id="feedback-drinks-list" style="margin-top:12px;"></div>
       <button class="btn btn-accent" style="width:100%; padding:14px; margin-top:14px;" onclick="submitAllDrinkFeedback()">Complete & Celebrate 🎉</button>
     </div>
   </div>
 
   <script>
-    // SUPABASE CREDENTIALS
+    // Configured Supabase Credentials
     const SUPABASE_URL = "https://pyhtaokoaykjyodesvnm.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5aHRhb2tvYXlranlvZGVzdm5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2ODk2MjksImV4cCI6MjEwNDI2NTYyOX0.4rkTzdxwC8o_DDwnulg-exv2xb30LI5RxE0nZqkojH8";
     const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -521,10 +563,11 @@
       currentUser: null,
       staffList: [],
       drinks: [],
-      addons: [],
+      toppings: [],
       inventory: [],
       cart: [],
       selectedDrink: null,
+      selectedToppings: [],
       activeCategory: 'ALL',
       selectedPaymentMode: 'UPI',
       currentPlacedOrderId: null,
@@ -539,7 +582,33 @@
       document.getElementById('report-date-picker').value = new Date().toISOString().split('T')[0];
     }
 
-    // --- AUTHENTICATION ---
+    // --- HELPER: FILE TO BASE64 OR SUPABASE STORAGE ---
+    async function uploadImageFile(fileInput) {
+      const file = fileInput.files[0];
+      if (!file) return null;
+
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const { data, error } = await client.storage.from('menu-images').upload(fileName, file);
+
+        if (!error && data) {
+          const { data: pubData } = client.storage.from('menu-images').getPublicUrl(fileName);
+          return pubData.publicUrl;
+        }
+      } catch (err) {
+        console.warn("Storage upload failed, falling back to data URL:", err);
+      }
+
+      // Fallback to Base64 Data URL
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // --- AUTH ---
     async function loadStaff() {
       const { data } = await client.from('staff').select('*').eq('active', true);
       state.staffList = data || [];
@@ -579,13 +648,13 @@
     }
 
     async function refreshAllData() {
-      const [d, a, i] = await Promise.all([
+      const [d, t, i] = await Promise.all([
         client.from('drinks').select('*, recipe_items(*, inventory(*))'),
-        client.from('addons').select('*'),
+        client.from('toppings').select('*, inventory(*)').eq('is_active', true),
         client.from('inventory').select('*').order('name')
       ]);
       state.drinks = d.data || [];
-      state.addons = a.data || [];
+      state.toppings = t.data || [];
       state.inventory = i.data || [];
     }
 
@@ -598,6 +667,8 @@
         'history': 'history-view',
         'reports': 'reports-view',
         'admin-menu': 'admin-menu-view',
+        'admin-toppings': 'admin-toppings-view',
+        'admin-bom': 'admin-bom-view',
         'admin-inventory': 'admin-inventory-view',
         'admin-users': 'admin-users-view',
         'admin-bulk': 'admin-bulk-view'
@@ -610,11 +681,13 @@
       if (tab === 'history') loadSalesHistory();
       if (tab === 'reports') renderReports();
       if (tab === 'admin-menu') renderAdminMenu();
+      if (tab === 'admin-toppings') renderToppingsAdmin();
+      if (tab === 'admin-bom') populateMultiBOMSelect();
       if (tab === 'admin-inventory') renderInventoryModule();
       if (tab === 'admin-users') renderStaffModule();
     }
 
-    // --- POS & CATEGORIES ---
+    // --- POS MODULE ---
     function renderCategories() {
       const categories = ['ALL', ...new Set(state.drinks.map(d => d.category || 'Cold Pressed'))];
       const container = document.getElementById('cat-pill-container');
@@ -639,7 +712,7 @@
       }
 
       container.innerHTML = filtered.map(d => `
-        <div class="drink-card" onclick="openAddonModal('${d.id}')">
+        <div class="drink-card" onclick="openToppingsModal('${d.id}')">
           <div class="drink-img-wrap">
             <img class="drink-img" src="${d.image_url || 'https://images.unsplash.com/photo-1613478223719-2ab802602423?w=500'}" alt="${d.name}" />
           </div>
@@ -652,38 +725,47 @@
       `).join('');
     }
 
-    // --- ADDON MODAL ---
-    function openAddonModal(id) {
-      state.selectedDrink = state.drinks.find(d => d.id === id);
-      document.getElementById('modal-drink-title').innerText = `Addons: ${state.selectedDrink.name}`;
-      const container = document.getElementById('modal-addons-list');
-      container.innerHTML = state.addons.map(a => `
-        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-          <label><input type="checkbox" value="${a.id}" data-name="${a.name}" data-price="${a.price}"> ${a.name}</label>
-          <span style="font-weight:700;">+₹${a.price}</span>
+    // --- TOPPINGS MODAL WITH IMAGES ---
+    function openToppingsModal(drinkId) {
+      state.selectedDrink = state.drinks.find(d => d.id === drinkId);
+      state.selectedToppings = [];
+      document.getElementById('modal-drink-title').innerText = `Add Toppings: ${state.selectedDrink.name}`;
+
+      const container = document.getElementById('modal-toppings-list');
+      container.innerHTML = state.toppings.map(t => `
+        <div class="topping-card" id="top-card-${t.id}" onclick="toggleToppingSelection('${t.id}')">
+          <img class="topping-img" src="${t.image_url || 'https://images.unsplash.com/photo-1514733670139-4d87a1941d55?w=200'}" />
+          <div>
+            <div style="font-weight:800; font-size:0.85rem;">${t.name}</div>
+            <div style="color:var(--accent); font-weight:800; font-size:0.8rem;">+₹${t.price}</div>
+          </div>
         </div>
       `).join('');
+
       document.getElementById('addon-modal').style.display = 'flex';
     }
 
-    function closeModal(id) {
-      document.getElementById(id).style.display = 'none';
+    function toggleToppingSelection(topId) {
+      const card = document.getElementById(`top-card-${topId}`);
+      const topping = state.toppings.find(t => t.id === topId);
+      const idx = state.selectedToppings.findIndex(t => t.id === topId);
+
+      if (idx > -1) {
+        state.selectedToppings.splice(idx, 1);
+        card.classList.remove('selected');
+      } else {
+        state.selectedToppings.push(topping);
+        card.classList.add('selected');
+      }
     }
 
     function confirmAddToCart() {
-      const checkedBoxes = document.querySelectorAll('#modal-addons-list input:checked');
-      const selected = Array.from(checkedBoxes).map(b => ({
-        id: b.value,
-        name: b.dataset.name,
-        price: parseFloat(b.dataset.price)
-      }));
-
-      const total = state.selectedDrink.base_price + selected.reduce((s, a) => s + a.price, 0);
+      const toppingTotal = state.selectedToppings.reduce((s, t) => s + t.price, 0);
       state.cart.push({
         drink_id: state.selectedDrink.id,
         name: state.selectedDrink.name,
-        addons: selected,
-        price: total
+        addons: [...state.selectedToppings],
+        price: state.selectedDrink.base_price + toppingTotal
       });
 
       closeModal('addon-modal');
@@ -721,7 +803,11 @@
       renderCart();
     }
 
-    // --- PAYMENT & CASH CHANGE MODAL ---
+    function closeModal(id) {
+      document.getElementById(id).style.display = 'none';
+    }
+
+    // --- PAYMENTS & ORDERS ---
     function openPaymentModal() {
       if (!state.cart.length) return alert('Ticket is empty.');
       const phone = document.getElementById('cust-phone').value.trim();
@@ -749,19 +835,17 @@
       document.getElementById('cash-change-due').innerText = `₹${change}`;
     }
 
-    // --- FINALIZE ORDER & AUTOMATIC FEEDBACK MODAL ---
     async function finalizeOrder() {
       const phone = document.getElementById('cust-phone').value.trim();
       const name = document.getElementById('cust-name').value.trim();
       const total = state.cart.reduce((s, i) => s + i.price, 0);
 
-      // Customer
       let customerId = null;
       const { data: cust } = await client.from('customers').select('id').eq('phone', phone).single();
       if (cust) {
         customerId = cust.id;
       } else {
-        const { data: newC } = await client.from('customers').insert({ name: name || 'Valued Guest', phone }).select().single();
+        const { data: newC } = await client.from('customers').insert({ name: name || 'Guest', phone }).select().single();
         customerId = newC?.id;
       }
 
@@ -769,7 +853,6 @@
       const cashTendered = parseFloat(document.getElementById('cash-received').value) || total;
       const changeDue = Math.max(0, cashTendered - total);
 
-      // Create Order
       const { data: order, error: oErr } = await client.from('orders').insert({
         customer_id: customerId,
         total_amount: total,
@@ -783,7 +866,6 @@
 
       if (oErr) return alert(oErr.message);
 
-      // Create Line Items
       const items = state.cart.map(c => ({
         order_id: order.id,
         drink_id: c.drink_id,
@@ -795,29 +877,23 @@
       const { data: insertedItems } = await client.from('order_items').insert(items).select();
 
       closeModal('payment-modal');
-
-      // Gamified Confetti Splash
       confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
 
-      // Save Order Context for Feedback Modal
       state.currentPlacedOrderId = order.id;
       state.currentPlacedOrderItems = insertedItems || [];
-
-      // Clear POS Screen
       state.cart = [];
       document.getElementById('cust-name').value = '';
       document.getElementById('cust-phone').value = '';
       renderCart();
       await refreshAllData();
 
-      // Trigger Immediate Feedback Collection Modal
       openFeedbackModal();
     }
 
     function openFeedbackModal() {
       const container = document.getElementById('feedback-drinks-list');
-      container.innerHTML = state.currentPlacedOrderItems.map((item, idx) => `
-        <div style="background:#f5f8f5; padding:12px; border-radius:10px; margin-bottom:10px;" id="fb-row-${item.id}">
+      container.innerHTML = state.currentPlacedOrderItems.map(item => `
+        <div style="background:#f5f8f5; padding:12px; border-radius:10px; margin-bottom:10px;">
           <h4 style="color:var(--primary); font-size:0.95rem;">${item.drink_name}</h4>
           <div class="star-bar" id="stars-${item.id}">
             ${[1,2,3,4,5].map(star => `
@@ -825,7 +901,7 @@
             `).join('')}
           </div>
           <input type="hidden" id="rating-val-${item.id}" value="5" />
-          <input type="text" id="comment-val-${item.id}" placeholder="e.g. Refreshing, well-blended..." style="margin-top:6px;" />
+          <input type="text" id="comment-val-${item.id}" placeholder="Taste notes..." style="margin-top:6px;" />
         </div>
       `).join('');
       document.getElementById('feedback-modal').style.display = 'flex';
@@ -834,9 +910,7 @@
     function setRating(itemId, stars) {
       document.getElementById(`rating-val-${itemId}`).value = stars;
       const starBtns = document.querySelectorAll(`#stars-${itemId} .star-btn`);
-      starBtns.forEach((btn, idx) => {
-        btn.classList.toggle('active', idx < stars);
-      });
+      starBtns.forEach((btn, idx) => btn.classList.toggle('active', idx < stars));
     }
 
     async function submitAllDrinkFeedback() {
@@ -845,48 +919,12 @@
         const comment = document.getElementById(`comment-val-${item.id}`).value.trim();
         await client.from('order_items').update({ feedback_rating: rating, feedback_comment: comment }).eq('id', item.id);
       }
-
       closeModal('feedback-modal');
       confetti({ particleCount: 80, spread: 50, origin: { y: 0.5 } });
     }
 
-    // --- SALES HISTORY & DRINK RETRIEVAL ---
-    async function loadSalesHistory() {
-      const date = document.getElementById('history-date-picker').value;
-      const start = `${date}T00:00:00.000Z`;
-      const end = `${date}T23:59:59.999Z`;
-
-      const { data: orders } = await client.from('orders')
-        .select('*, order_items(*)')
-        .gte('created_at', start)
-        .lte('created_at', end)
-        .order('created_at', { ascending: false });
-
-      const tbody = document.getElementById('history-table-body');
-      if (!orders || !orders.length) {
-        tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-muted); text-align:center;">No orders recorded on this date.</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = orders.map(o => `
-        <tr>
-          <td><strong>${o.receipt_no || o.id.substring(0,8)}</strong></td>
-          <td>${o.barista_name || '-'}</td>
-          <td>₹${o.total_amount}</td>
-          <td><span class="drink-cat">${o.payment_method}</span></td>
-          <td><small>${(o.order_items || []).map(i => i.drink_name).join(', ')}</small></td>
-          <td>${new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-        </tr>
-      `).join('');
-    }
-
-    // --- MENU ADMIN & RETRIEVE DRINKS ---
+    // --- MENU ADMIN (CREATE & EDIT DRINKS) ---
     function renderAdminMenu() {
-      document.getElementById('recipe-drink-select').innerHTML = '<option value="">Select Drink</option>' +
-        state.drinks.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
-      document.getElementById('recipe-inv-select').innerHTML = '<option value="">Select Inventory Item</option>' +
-        state.inventory.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
-
       const tbody = document.getElementById('admin-menu-body');
       tbody.innerHTML = state.drinks.map(d => `
         <tr>
@@ -894,47 +932,185 @@
           <td><strong>${d.name}</strong></td>
           <td>₹${d.base_price}</td>
           <td>${d.category}</td>
-          <td>${d.is_active !== false ? '<span style="color:var(--success); font-weight:800;">ACTIVE</span>' : '<span style="color:var(--danger); font-weight:800;">ARCHIVED</span>'}</td>
+          <td>${d.is_active ? '<span style="color:var(--success); font-weight:800;">ACTIVE</span>' : '<span style="color:var(--danger); font-weight:800;">ARCHIVED</span>'}</td>
           <td>
-            ${d.is_active !== false 
-              ? `<button class="btn btn-danger btn-sm" onclick="toggleDrinkStatus('${d.id}', false)">Archive</button>` 
-              : `<button class="btn btn-accent btn-sm" onclick="toggleDrinkStatus('${d.id}', true)">Retrieve / Activate</button>`}
+            <button class="btn btn-sm" onclick="openEditDrinkModal('${d.id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="toggleDrinkStatus('${d.id}', ${!d.is_active})">${d.is_active ? 'Archive' : 'Restore'}</button>
           </td>
         </tr>
       `).join('');
-    }
-
-    async function toggleDrinkStatus(id, newStatus) {
-      await client.from('drinks').update({ is_active: newStatus }).eq('id', id);
-      await refreshAllData();
-      renderAdminMenu();
     }
 
     async function addNewDrink() {
       const name = document.getElementById('new-drink-name').value.trim();
       const price = parseFloat(document.getElementById('new-drink-price').value);
       const category = document.getElementById('new-drink-cat').value.trim() || 'Cold Pressed';
-      const image_url = document.getElementById('new-drink-img').value.trim() || 'https://images.unsplash.com/photo-1613478223719-2ab802602423?w=500';
+      const fileInput = document.getElementById('new-drink-file');
 
-      if (!name || isNaN(price)) return alert('Enter name and price.');
-      await client.from('drinks').insert({ name, base_price: price, category, image_url, is_active: true });
+      if (!name || isNaN(price)) return alert('Name and Price required.');
+      const uploadedUrl = await uploadImageFile(fileInput);
+
+      await client.from('drinks').insert({
+        name,
+        base_price: price,
+        category,
+        image_url: uploadedUrl || 'https://images.unsplash.com/photo-1613478223719-2ab802602423?w=500',
+        is_active: true
+      });
+
       document.getElementById('new-drink-name').value = '';
       document.getElementById('new-drink-price').value = '';
+      document.getElementById('new-drink-file').value = '';
       await refreshAllData();
       renderAdminMenu();
     }
 
-    async function linkRecipeItem() {
-      const drink_id = document.getElementById('recipe-drink-select').value;
-      const inventory_id = document.getElementById('recipe-inv-select').value;
-      const qty_required = parseFloat(document.getElementById('recipe-qty').value);
-      if (!drink_id || !inventory_id || isNaN(qty_required)) return alert('Fill all BOM fields.');
+    function openEditDrinkModal(id) {
+      const drink = state.drinks.find(d => d.id === id);
+      document.getElementById('edit-drink-id').value = drink.id;
+      document.getElementById('edit-drink-name').value = drink.name;
+      document.getElementById('edit-drink-price').value = drink.base_price;
+      document.getElementById('edit-drink-cat').value = drink.category;
+      document.getElementById('edit-drink-modal').style.display = 'flex';
+    }
 
-      await client.from('recipe_items').insert({ drink_id, inventory_id, qty_required });
-      alert('Ingredient linked to formulation!');
-      document.getElementById('recipe-qty').value = '';
+    async function saveEditedDrink() {
+      const id = document.getElementById('edit-drink-id').value;
+      const name = document.getElementById('edit-drink-name').value.trim();
+      const price = parseFloat(document.getElementById('edit-drink-price').value);
+      const category = document.getElementById('edit-drink-cat').value.trim();
+      const fileInput = document.getElementById('edit-drink-file');
+
+      let updatePayload = { name, base_price: price, category };
+      const newImg = await uploadImageFile(fileInput);
+      if (newImg) updatePayload.image_url = newImg;
+
+      await client.from('drinks').update(updatePayload).eq('id', id);
+      closeModal('edit-drink-modal');
       await refreshAllData();
       renderAdminMenu();
+    }
+
+    async function toggleDrinkStatus(id, status) {
+      await client.from('drinks').update({ is_active: status }).eq('id', id);
+      await refreshAllData();
+      renderAdminMenu();
+    }
+
+    // --- TOPPINGS ADMIN ---
+    function renderToppingsAdmin() {
+      document.getElementById('new-top-inv-select').innerHTML = '<option value="">Select Linked Inventory SKU</option>' +
+        state.inventory.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
+
+      const tbody = document.getElementById('admin-toppings-body');
+      tbody.innerHTML = state.toppings.map(t => `
+        <tr>
+          <td><img src="${t.image_url || 'https://images.unsplash.com/photo-1514733670139-4d87a1941d55?w=200'}" style="width:36px; height:36px; object-fit:cover; border-radius:6px;" /></td>
+          <td><strong>${t.name}</strong></td>
+          <td>₹${t.price}</td>
+          <td>${t.inventory?.name || '-'}</td>
+          <td>${t.qty_used || 0}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="removeTopping('${t.id}')">Delete</button></td>
+        </tr>
+      `).join('');
+    }
+
+    async function addNewTopping() {
+      const name = document.getElementById('new-top-name').value.trim();
+      const price = parseFloat(document.getElementById('new-top-price').value);
+      const inventory_id = document.getElementById('new-top-inv-select').value || null;
+      const qty_used = parseFloat(document.getElementById('new-top-qty').value) || 0;
+      const fileInput = document.getElementById('new-top-file');
+
+      if (!name || isNaN(price)) return alert('Name and Price required.');
+      const imgUrl = await uploadImageFile(fileInput);
+
+      await client.from('toppings').insert({
+        name,
+        price,
+        inventory_id,
+        qty_used,
+        image_url: imgUrl || 'https://images.unsplash.com/photo-1514733670139-4d87a1941d55?w=200',
+        is_active: true
+      });
+
+      document.getElementById('new-top-name').value = '';
+      document.getElementById('new-top-price').value = '';
+      document.getElementById('new-top-qty').value = '';
+      document.getElementById('new-top-file').value = '';
+      await refreshAllData();
+      renderToppingsAdmin();
+    }
+
+    async function removeTopping(id) {
+      if (!confirm('Remove this topping?')) return;
+      await client.from('toppings').delete().eq('id', id);
+      await refreshAllData();
+      renderToppingsAdmin();
+    }
+
+    // --- MULTI-INGREDIENT BOM BUILDER ---
+    function populateMultiBOMSelect() {
+      const select = document.getElementById('multi-bom-drink-select');
+      select.innerHTML = '<option value="">Choose Drink...</option>' +
+        state.drinks.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+      document.getElementById('bom-rows-container').innerHTML = '';
+    }
+
+    function addBOMRow(invId = '', qty = '') {
+      const container = document.getElementById('bom-rows-container');
+      const rowDiv = document.createElement('div');
+      rowDiv.className = 'bom-row';
+
+      const options = state.inventory.map(i => `
+        <option value="${i.id}" ${i.id === invId ? 'selected' : ''}>${i.name} (${i.unit})</option>
+      `).join('');
+
+      rowDiv.innerHTML = `
+        <select class="bom-inv-select"><option value="">Select Ingredient...</option>${options}</select>
+        <input type="number" class="bom-qty-input" placeholder="Qty" value="${qty}" />
+        <button class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>
+      `;
+      container.appendChild(rowDiv);
+    }
+
+    function loadExistingDrinkBOM() {
+      const drinkId = document.getElementById('multi-bom-drink-select').value;
+      const container = document.getElementById('bom-rows-container');
+      container.innerHTML = '';
+      if (!drinkId) return;
+
+      const drink = state.drinks.find(d => d.id === drinkId);
+      if (drink && drink.recipe_items && drink.recipe_items.length) {
+        drink.recipe_items.forEach(r => addBOMRow(r.inventory_id, r.qty_required));
+      } else {
+        addBOMRow();
+      }
+    }
+
+    async function saveMultiBOM() {
+      const drinkId = document.getElementById('multi-bom-drink-select').value;
+      if (!drinkId) return alert('Select a drink first.');
+
+      const rows = document.querySelectorAll('.bom-row');
+      let newBOM = [];
+
+      rows.forEach(r => {
+        const invId = r.querySelector('.bom-inv-select').value;
+        const qty = parseFloat(r.querySelector('.bom-qty-input').value);
+        if (invId && !isNaN(qty)) {
+          newBOM.push({ drink_id: drinkId, inventory_id: invId, qty_required: qty });
+        }
+      });
+
+      // Clear existing formulation for this drink & replace
+      await client.from('recipe_items').delete().eq('drink_id', drinkId);
+      if (newBOM.length) {
+        await client.from('recipe_items').insert(newBOM);
+      }
+
+      alert('Multi-Ingredient Recipe BOM Updated!');
+      await refreshAllData();
     }
 
     // --- INVENTORY MODULE ---
@@ -961,7 +1137,7 @@
 
       if (!inventory_id || isNaN(qty_added)) return alert('Select item and quantity.');
       await client.from('grocery_inward').insert({ inventory_id, qty_added, cost_price, vendor_notes });
-      alert('Grocery recorded! Live warehouse stock updated.');
+      alert('Grocery Restocked!');
       document.getElementById('inward-qty').value = '';
       await refreshAllData();
       renderInventoryModule();
@@ -998,7 +1174,7 @@
       if (!name || !pin) return alert('Name and PIN required.');
 
       await client.from('staff').insert({ name, role, pin, active: true });
-      alert('Staff account created!');
+      alert('Staff registered!');
       document.getElementById('new-user-name').value = '';
       document.getElementById('new-user-pin').value = '';
       await loadStaff();
@@ -1012,64 +1188,37 @@
       renderStaffModule();
     }
 
-    // --- BULK EXCEL UPLOADER & SAMPLES ---
-    function downloadSampleExcel(type) {
-      let data = [];
-      let filename = '';
-      if (type === 'drinks') {
-        data = [
-          { name: "Watermelon Hydrator", base_price: 180, category: "Hydration", image_url: "https://images.unsplash.com/photo-1589733955941-5eeaf752f6dd?w=500" },
-          { name: "Charcoal Detox Tonic", base_price: 260, category: "Detox", image_url: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=500" }
-        ];
-        filename = 'BeingJuice_Drinks_Sample.xlsx';
-      } else {
-        data = [
-          { name: "Fresh Watermelon", stock_qty: 25000, unit: "g" },
-          { name: "Activated Charcoal Powder", stock_qty: 500, unit: "g" }
-        ];
-        filename = 'BeingJuice_Ingredients_Sample.xlsx';
+    // --- SALES HISTORY ---
+    async function loadSalesHistory() {
+      const date = document.getElementById('history-date-picker').value;
+      const start = `${date}T00:00:00.000Z`;
+      const end = `${date}T23:59:59.999Z`;
+
+      const { data: orders } = await client.from('orders')
+        .select('*, order_items(*)')
+        .gte('created_at', start)
+        .lte('created_at', end)
+        .order('created_at', { ascending: false });
+
+      const tbody = document.getElementById('history-table-body');
+      if (!orders || !orders.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">No sales recorded on this date.</td></tr>';
+        return;
       }
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Sample");
-      XLSX.writeFile(wb, filename);
+
+      tbody.innerHTML = orders.map(o => `
+        <tr>
+          <td><strong>${o.receipt_no || o.id.substring(0,8)}</strong></td>
+          <td>${o.barista_name || '-'}</td>
+          <td>₹${o.total_amount}</td>
+          <td><span class="drink-cat">${o.payment_method}</span></td>
+          <td><small>${(o.order_items || []).map(i => i.drink_name).join(', ')}</small></td>
+          <td>${new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+        </tr>
+      `).join('');
     }
 
-    async function uploadBulkDrinks() {
-      const file = document.getElementById('excel-drinks-file').files[0];
-      if (!file) return alert('Please choose an Excel file.');
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, { type: 'array' });
-        const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-        if (!json.length) return alert('Excel sheet is empty.');
-
-        await client.from('drinks').insert(json);
-        alert(`Successfully imported ${json.length} drinks!`);
-        await refreshAllData();
-      };
-      reader.readAsArrayBuffer(file);
-    }
-
-    async function uploadBulkInventory() {
-      const file = document.getElementById('excel-inv-file').files[0];
-      if (!file) return alert('Please choose an Excel file.');
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, { type: 'array' });
-        const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-        if (!json.length) return alert('Excel sheet is empty.');
-
-        await client.from('inventory').insert(json);
-        alert(`Successfully imported ${json.length} ingredients!`);
-        await refreshAllData();
-      };
-      reader.readAsArrayBuffer(file);
-    }
-
-    // --- INFOGRAPHICS REPORTS ---
+    // --- INFOGRAPHICS ---
     async function renderReports() {
       const date = document.getElementById('report-date-picker').value;
       const start = `${date}T00:00:00.000Z`;
@@ -1120,6 +1269,57 @@
           datasets: [{ data: Object.values(ratingDist), backgroundColor: ['#ef4444', '#f97316', '#eab308', '#84cc16', '#10b981'] }]
         }
       });
+    }
+
+    // --- BULK EXCEL ---
+    function downloadSampleExcel(type) {
+      let data = [];
+      let filename = '';
+      if (type === 'drinks') {
+        data = [
+          { name: "Watermelon Glow", base_price: 180, category: "Hydration", image_url: "https://images.unsplash.com/photo-1589733955941-5eeaf752f6dd?w=500" }
+        ];
+        filename = 'BeingJuice_Drinks_Sample.xlsx';
+      } else {
+        data = [
+          { name: "Fresh Watermelon", stock_qty: 25000, unit: "g" }
+        ];
+        filename = 'BeingJuice_Ingredients_Sample.xlsx';
+      }
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Sample");
+      XLSX.writeFile(wb, filename);
+    }
+
+    async function uploadBulkDrinks() {
+      const file = document.getElementById('excel-drinks-file').files[0];
+      if (!file) return alert('Select file.');
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        await client.from('drinks').insert(json);
+        alert(`Imported ${json.length} drinks!`);
+        await refreshAllData();
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    async function uploadBulkInventory() {
+      const file = document.getElementById('excel-inv-file').files[0];
+      if (!file) return alert('Select file.');
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        await client.from('inventory').insert(json);
+        alert(`Imported ${json.length} ingredients!`);
+        await refreshAllData();
+      };
+      reader.readAsArrayBuffer(file);
     }
 
     window.onload = init;
