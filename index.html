@@ -28,7 +28,7 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: var(--bg); color: var(--text); padding: 14px; min-height: 100vh; }
+    body { background: var(--bg); color: var(--text); padding: 14px; min-height: 100vh; padding-bottom: 90px; }
 
     header {
       display: flex;
@@ -98,10 +98,7 @@
     }
     .cat-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
 
-    /* POS UI Grid */
-    .pos-grid { display: grid; grid-template-columns: 1fr 380px; gap: 18px; }
-    @media (max-width: 950px) { .pos-grid { grid-template-columns: 1fr; } }
-
+    /* POS UI Grid - Now full width for easy browsing */
     .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
     .drink-card {
       background: var(--card);
@@ -123,19 +120,71 @@
     .drink-title { font-size: 0.95rem; font-weight: 800; color: var(--text); line-height: 1.25; }
     .drink-price { font-size: 1.15rem; font-weight: 900; color: var(--primary); margin-top: 6px; }
 
-    /* Cart */
-    .cart-pane {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 18px;
+    /* FLOATING CART FAB */
+    .cart-fab {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 50px;
+      padding: 14px 22px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 1rem;
+      font-weight: 800;
+      box-shadow: 0 10px 25px rgba(16, 86, 52, 0.35);
+      cursor: pointer;
+      z-index: 90;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+    .cart-fab:hover { transform: scale(1.04); background: var(--primary-hover); }
+    .cart-badge {
+      background: var(--accent);
+      color: white;
+      font-size: 0.8rem;
+      font-weight: 900;
+      padding: 3px 8px;
+      border-radius: 20px;
+    }
+
+    /* SLIDE-OVER TICKET DRAWER */
+    .drawer-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(16, 86, 52, 0.35);
+      backdrop-filter: blur(3px);
+      z-index: 150;
+      display: none;
+      justify-content: flex-end;
+    }
+    .drawer-overlay.active { display: flex; }
+
+    .drawer-content {
+      background: white;
+      width: 420px;
+      max-width: 90vw;
+      height: 100%;
+      box-shadow: -10px 0 30px rgba(0,0,0,0.15);
+      padding: 24px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      height: fit-content;
-      box-shadow: var(--shadow);
+      justify-content: space-between;
+      animation: slideLeft 0.2s ease-out;
     }
-    .cart-pane input, .admin-box input, .admin-box select {
+    @keyframes slideLeft {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+
+    .drawer-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 12px; }
+    .cart-items { flex: 1; overflow-y: auto; padding: 14px 0; }
+    .cart-item { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 12px; border-bottom: 1px dashed var(--border); padding-bottom: 8px; }
+
+    /* General Inputs & Buttons */
+    input, select {
       width: 100%;
       padding: 10px 12px;
       border: 1px solid var(--border);
@@ -143,10 +192,7 @@
       font-size: 0.9rem;
       background: #fdfdfc;
     }
-    .cart-items { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 10px 0; max-height: 250px; overflow-y: auto; }
-    .cart-item { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 8px; }
 
-    /* Buttons */
     .btn {
       background: var(--primary);
       color: white;
@@ -165,7 +211,7 @@
     .btn-sm { padding: 6px 10px; font-size: 0.78rem; border-radius: 6px; }
 
     /* Modals */
-    .modal { display: none; position: fixed; inset: 0; background: rgba(16, 86, 52, 0.4); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 100; }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(16, 86, 52, 0.4); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 200; }
     .modal-box { background: var(--card); padding: 22px; border-radius: 16px; width: 450px; border: 1px solid var(--border); max-width: 92vw; box-shadow: 0 15px 35px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
 
     /* Toppings Selection Cards in Modal */
@@ -194,13 +240,8 @@
     th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
     th { background: #eef4f0; font-weight: 800; color: var(--primary); }
 
-    /* Profound Glowing Stars */
-    .star-bar {
-      display: flex;
-      gap: 12px;
-      margin: 10px 0 14px 0;
-    }
-
+    /* Star rating */
+    .star-bar { display: flex; gap: 12px; margin: 10px 0 14px 0; }
     .star-btn {
       font-size: 2.3rem;
       cursor: pointer;
@@ -210,25 +251,15 @@
       transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.15s ease;
       line-height: 1;
     }
-
-    .star-btn:hover {
-      transform: scale(1.25);
-    }
-
+    .star-btn:hover { transform: scale(1.25); }
     .star-btn.active {
       color: #fbbf24;
       filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.7));
       transform: scale(1.2);
     }
 
-    /* Value for Money Selector Pills */
-    .vfm-bar {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      margin: 8px 0 14px 0;
-    }
-
+    /* VFM Selector */
+    .vfm-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 14px 0; }
     .vfm-btn {
       padding: 8px;
       border-radius: 8px;
@@ -240,12 +271,7 @@
       color: var(--text);
       transition: all 0.15s ease;
     }
-
-    .vfm-btn.active {
-      border-color: var(--primary);
-      background: #eef7f2;
-      color: var(--primary);
-    }
+    .vfm-btn.active { border-color: var(--primary); background: #eef7f2; color: var(--primary); }
 
     /* Login Screen */
     #login-overlay { position: fixed; inset: 0; background: linear-gradient(135deg, #105634, #ff6b35); z-index: 999; display: flex; align-items: center; justify-content: center; }
@@ -293,34 +319,50 @@
     </div>
   </header>
 
-  <!-- 1. BARISTA POS -->
+  <!-- 1. BARISTA POS (FULL-WIDTH GRID) -->
   <section id="pos-view" class="view active">
     <div class="category-scroll" id="cat-pill-container">
       <button class="cat-btn active" onclick="filterCategory('ALL')">All Blends</button>
     </div>
 
-    <div class="pos-grid">
-      <div>
-        <div class="menu-grid" id="pos-menu-container">Loading cold-pressed juices...</div>
-      </div>
+    <div class="menu-grid" id="pos-menu-container">Loading cold-pressed juices...</div>
+  </section>
 
-      <div class="cart-pane">
-        <h3 style="color:var(--primary); font-size:1.1rem; font-weight:800;">Active Ticket 🥤</h3>
-        <input type="text" id="cust-name" placeholder="Customer Name (Optional)" />
-        <input type="tel" id="cust-phone" placeholder="Customer Phone (Required)" />
+  <!-- FLOATING CART BUTTON (FAB) -->
+  <button class="cart-fab" id="cart-fab-btn" onclick="openDrawer()">
+    <span>🥤 Active Ticket</span>
+    <span class="cart-badge" id="fab-badge">0</span>
+    <span id="fab-total" style="font-size: 1.1rem;">₹0</span>
+  </button>
+
+  <!-- SLIDE-OVER DRAWER FOR CURRENT TICKET -->
+  <div class="drawer-overlay" id="drawer-overlay" onclick="handleDrawerClick(event)">
+    <div class="drawer-content">
+      <div>
+        <div class="drawer-header">
+          <h3 style="color:var(--primary); font-weight:900;">Active Ticket 🥤</h3>
+          <button onclick="closeDrawer()" style="background:none; border:none; font-size:1.6rem; cursor:pointer; font-weight:800; color:var(--text-muted);">✕</button>
+        </div>
+
+        <div style="margin-top:14px; display:flex; flex-direction:column; gap:10px;">
+          <input type="text" id="cust-name" placeholder="Customer Name (Optional)" />
+          <input type="tel" id="cust-phone" placeholder="Customer Phone (Required)" />
+        </div>
 
         <div class="cart-items" id="cart-list">Cart is empty</div>
+      </div>
 
-        <div style="display:flex; justify-content:space-between; font-weight:900; font-size:1.25rem; color:var(--primary); padding:4px 0;">
+      <div>
+        <div style="display:flex; justify-content:space-between; font-weight:900; font-size:1.35rem; color:var(--primary); margin:12px 0;">
           <span>Total:</span>
           <span id="cart-total-amt">₹0</span>
         </div>
-        <button class="btn btn-accent" style="width:100%; padding:14px; font-size:1.05rem;" onclick="openPaymentModal()">
+        <button class="btn btn-accent" style="width:100%; padding:15px; font-size:1.05rem;" onclick="openPaymentModal()">
           Settle Order ✨
         </button>
       </div>
     </div>
-  </section>
+  </div>
 
   <!-- 2. SALES HISTORY -->
   <section id="history-view" class="view">
@@ -379,7 +421,7 @@
     </div>
   </section>
 
-  <!-- 4. MENU ADMIN (ADD / EDIT DRINK WITH IMAGE UPLOAD) -->
+  <!-- 4. MENU ADMIN -->
   <section id="admin-menu-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
@@ -411,7 +453,7 @@
     </div>
   </section>
 
-  <!-- 5. TOPPINGS ADMIN (ADD / UPLOAD IMAGE) -->
+  <!-- 5. TOPPINGS ADMIN -->
   <section id="admin-toppings-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
@@ -453,7 +495,7 @@
     </div>
   </section>
 
-  <!-- 7. GROCERY INWARD (ADMIN) -->
+  <!-- 7. GROCERY INWARD -->
   <section id="admin-inventory-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
@@ -630,6 +672,19 @@
       document.getElementById('report-date-picker').value = new Date().toISOString().split('T')[0];
     }
 
+    // --- DRAWER CONTROLS ---
+    function openDrawer() {
+      document.getElementById('drawer-overlay').classList.add('active');
+    }
+
+    function closeDrawer() {
+      document.getElementById('drawer-overlay').classList.remove('active');
+    }
+
+    function handleDrawerClick(e) {
+      if (e.target.id === 'drawer-overlay') closeDrawer();
+    }
+
     // --- HELPER: FILE TO BASE64 OR SUPABASE STORAGE ---
     async function uploadImageFile(fileInput) {
       const file = fileInput.files[0];
@@ -648,7 +703,6 @@
         console.warn("Storage upload failed, falling back to data URL:", err);
       }
 
-      // Fallback to Base64 Data URL
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
@@ -740,7 +794,15 @@
       document.getElementById(map[tab]).classList.add('active');
       event.target.classList.add('active');
 
-      if (tab === 'pos') renderPOSMenu();
+      // Hide Floating Cart when in admin tabs
+      const fab = document.getElementById('cart-fab-btn');
+      if (tab === 'pos') {
+        fab.style.display = 'flex';
+        renderPOSMenu();
+      } else {
+        fab.style.display = 'none';
+      }
+
       if (tab === 'history') loadSalesHistory();
       if (tab === 'reports') renderReports();
       if (tab === 'admin-menu') renderAdminMenu();
@@ -833,15 +895,26 @@
 
       closeModal('addon-modal');
       renderCart();
+      
+      // Auto-open drawer when item is added so user immediately sees their updated ticket
+      openDrawer();
     }
 
     function renderCart() {
       const container = document.getElementById('cart-list');
+      const badge = document.getElementById('fab-badge');
+      const fabTotal = document.getElementById('fab-total');
+      const cartTotalAmt = document.getElementById('cart-total-amt');
+
+      badge.innerText = state.cart.length;
+
       if (!state.cart.length) {
-        container.innerHTML = 'Cart is empty';
-        document.getElementById('cart-total-amt').innerText = '₹0';
+        container.innerHTML = '<p style="color:var(--text-muted); text-align:center; margin-top:20px;">Cart is empty</p>';
+        fabTotal.innerText = '₹0';
+        cartTotalAmt.innerText = '₹0';
         return;
       }
+
       let total = 0;
       container.innerHTML = state.cart.map((item, idx) => {
         total += item.price;
@@ -851,14 +924,16 @@
               <strong>${item.name}</strong>
               ${item.addons.length ? `<br><small style="color:var(--text-muted);">+ ${item.addons.map(a => a.name).join(', ')}</small>` : ''}
             </div>
-            <div>
-              <span>₹${item.price}</span>
-              <button onclick="removeFromCart(${idx})" style="background:none; border:none; color:var(--danger); cursor:pointer; margin-left:6px;">×</button>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-weight:800;">₹${item.price}</span>
+              <button onclick="removeFromCart(${idx})" style="background:none; border:none; color:var(--danger); cursor:pointer; font-weight:bold; font-size:1.1rem;">×</button>
             </div>
           </div>
         `;
       }).join('');
-      document.getElementById('cart-total-amt').innerText = `₹${total}`;
+
+      fabTotal.innerText = `₹${total}`;
+      cartTotalAmt.innerText = `₹${total}`;
     }
 
     function removeFromCart(idx) {
@@ -940,6 +1015,7 @@
       const { data: insertedItems } = await client.from('order_items').insert(items).select();
 
       closeModal('payment-modal');
+      closeDrawer();
       confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
 
       state.currentPlacedOrderId = order.id;
@@ -960,7 +1036,6 @@
         <div style="background:#f8faf8; padding:16px; border-radius:12px; border:1px solid var(--border); margin-bottom:14px;" id="fb-item-${item.id}">
           <h4 style="color:var(--primary); font-size:1.05rem; font-weight:800;">${item.drink_name}</h4>
           
-          <!-- Question 1: Profound Star Rating -->
           <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-top:8px;">
             1. How was this drink?
           </label>
@@ -971,7 +1046,6 @@
           </div>
           <input type="hidden" id="rating-val-${item.id}" value="5" />
 
-          <!-- Question 2: Value for Money -->
           <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block;">
             2. Value for money:
           </label>
@@ -982,7 +1056,6 @@
           </div>
           <input type="hidden" id="vfm-val-${item.id}" value="Reasonable" />
 
-          <!-- Question 3: Wishlist / Suggestions -->
           <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block;">
             3. Any fruit, blend, or flavor to add?
           </label>
@@ -1206,7 +1279,6 @@
         }
       });
 
-      // Clear existing formulation for this drink & replace
       await client.from('recipe_items').delete().eq('drink_id', drinkId);
       if (newBOM.length) {
         await client.from('recipe_items').insert(newBOM);
