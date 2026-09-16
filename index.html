@@ -194,10 +194,58 @@
     th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
     th { background: #eef4f0; font-weight: 800; color: var(--primary); }
 
-    /* Star rating */
-    .star-bar { display: flex; gap: 8px; margin: 8px 0; }
-    .star-btn { font-size: 1.6rem; cursor: pointer; border: none; background: none; filter: grayscale(1); transition: 0.1s; }
-    .star-btn.active { filter: grayscale(0); transform: scale(1.15); }
+    /* Profound Glowing Stars */
+    .star-bar {
+      display: flex;
+      gap: 12px;
+      margin: 10px 0 14px 0;
+    }
+
+    .star-btn {
+      font-size: 2.3rem;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: #cbd5e1;
+      transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.15s ease;
+      line-height: 1;
+    }
+
+    .star-btn:hover {
+      transform: scale(1.25);
+    }
+
+    .star-btn.active {
+      color: #fbbf24;
+      filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.7));
+      transform: scale(1.2);
+    }
+
+    /* Value for Money Selector Pills */
+    .vfm-bar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 8px 0 14px 0;
+    }
+
+    .vfm-btn {
+      padding: 8px;
+      border-radius: 8px;
+      border: 1.5px solid var(--border);
+      background: white;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.82rem;
+      color: var(--text);
+      transition: all 0.15s ease;
+    }
+
+    .vfm-btn.active {
+      border-color: var(--primary);
+      background: #eef7f2;
+      color: var(--primary);
+    }
 
     /* Login Screen */
     #login-overlay { position: fixed; inset: 0; background: linear-gradient(135deg, #105634, #ff6b35); z-index: 999; display: flex; align-items: center; justify-content: center; }
@@ -544,7 +592,7 @@
     </div>
   </div>
 
-  <!-- MODAL: FEEDBACK -->
+  <!-- MODAL: 3-QUESTION FEEDBACK DIALOG -->
   <div class="modal" id="feedback-modal">
     <div class="modal-box">
       <h3 style="color:var(--primary); font-size:1.25rem;">Rate Your Juices! 🌟</h3>
@@ -610,9 +658,24 @@
 
     // --- AUTH ---
     async function loadStaff() {
-      const { data } = await client.from('staff').select('*').eq('active', true);
-      state.staffList = data || [];
       const select = document.getElementById('staff-select');
+      select.innerHTML = '<option value="">Loading staff accounts...</option>';
+
+      const { data, error } = await client.from('staff').select('*').eq('active', true);
+      
+      if (error) {
+        console.error("Staff fetch error:", error);
+        select.innerHTML = `<option value="">Error: ${error.message}</option>`;
+        return;
+      }
+
+      state.staffList = data || [];
+
+      if (!state.staffList.length) {
+        select.innerHTML = '<option value="">No staff found (run SQL seed)</option>';
+        return;
+      }
+
       select.innerHTML = '<option value="">Select Staff...</option>' +
         state.staffList.map(s => `<option value="${s.id}">${s.name} (${s.role.toUpperCase()})</option>`).join('');
     }
@@ -890,37 +953,77 @@
       openFeedbackModal();
     }
 
+    // --- 3-QUESTION FEEDBACK MODAL ---
     function openFeedbackModal() {
       const container = document.getElementById('feedback-drinks-list');
       container.innerHTML = state.currentPlacedOrderItems.map(item => `
-        <div style="background:#f5f8f5; padding:12px; border-radius:10px; margin-bottom:10px;">
-          <h4 style="color:var(--primary); font-size:0.95rem;">${item.drink_name}</h4>
+        <div style="background:#f8faf8; padding:16px; border-radius:12px; border:1px solid var(--border); margin-bottom:14px;" id="fb-item-${item.id}">
+          <h4 style="color:var(--primary); font-size:1.05rem; font-weight:800;">${item.drink_name}</h4>
+          
+          <!-- Question 1: Profound Star Rating -->
+          <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-top:8px;">
+            1. How was this drink?
+          </label>
           <div class="star-bar" id="stars-${item.id}">
-            ${[1,2,3,4,5].map(star => `
+            ${[1, 2, 3, 4, 5].map(star => `
               <button class="star-btn ${star <= 5 ? 'active' : ''}" onclick="setRating('${item.id}', ${star})">★</button>
             `).join('')}
           </div>
           <input type="hidden" id="rating-val-${item.id}" value="5" />
-          <input type="text" id="comment-val-${item.id}" placeholder="Taste notes..." style="margin-top:6px;" />
+
+          <!-- Question 2: Value for Money -->
+          <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block;">
+            2. Value for money:
+          </label>
+          <div class="vfm-bar" id="vfm-${item.id}">
+            <button type="button" class="vfm-btn" onclick="setVFM('${item.id}', 'Worth Every Penny')">Worth It 👍</button>
+            <button type="button" class="vfm-btn active" onclick="setVFM('${item.id}', 'Reasonable')">Fair 🙂</button>
+            <button type="button" class="vfm-btn" onclick="setVFM('${item.id}', 'Expensive')">Pricey 👎</button>
+          </div>
+          <input type="hidden" id="vfm-val-${item.id}" value="Reasonable" />
+
+          <!-- Question 3: Wishlist / Suggestions -->
+          <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block;">
+            3. Any fruit, blend, or flavor to add?
+          </label>
+          <input type="text" id="suggestion-val-${item.id}" placeholder="e.g. Add Passionfruit, Dragonfruit, more Ginger..." style="margin-top:6px; font-size:0.85rem;" />
         </div>
       `).join('');
+
       document.getElementById('feedback-modal').style.display = 'flex';
     }
 
     function setRating(itemId, stars) {
       document.getElementById(`rating-val-${itemId}`).value = stars;
       const starBtns = document.querySelectorAll(`#stars-${itemId} .star-btn`);
-      starBtns.forEach((btn, idx) => btn.classList.toggle('active', idx < stars));
+      starBtns.forEach((btn, idx) => {
+        btn.classList.toggle('active', idx < stars);
+      });
+    }
+
+    function setVFM(itemId, value) {
+      document.getElementById(`vfm-val-${itemId}`).value = value;
+      const buttons = document.querySelectorAll(`#vfm-${itemId} .vfm-btn`);
+      buttons.forEach(btn => {
+        btn.classList.toggle('active', btn.innerText.includes(value.split(' ')[0]));
+      });
     }
 
     async function submitAllDrinkFeedback() {
       for (const item of state.currentPlacedOrderItems) {
         const rating = parseInt(document.getElementById(`rating-val-${item.id}`).value);
-        const comment = document.getElementById(`comment-val-${item.id}`).value.trim();
-        await client.from('order_items').update({ feedback_rating: rating, feedback_comment: comment }).eq('id', item.id);
+        const vfm = document.getElementById(`vfm-val-${item.id}`).value;
+        const suggestion = document.getElementById(`suggestion-val-${item.id}`).value.trim();
+
+        await client.from('order_items').update({
+          feedback_rating: rating,
+          feedback_vfm: vfm,
+          feedback_suggestion: suggestion
+        }).eq('id', item.id);
       }
+
       closeModal('feedback-modal');
-      confetti({ particleCount: 80, spread: 50, origin: { y: 0.5 } });
+      confetti({ particleCount: 90, spread: 60, origin: { y: 0.5 } });
     }
 
     // --- MENU ADMIN (CREATE & EDIT DRINKS) ---
