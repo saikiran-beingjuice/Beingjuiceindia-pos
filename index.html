@@ -272,6 +272,11 @@
     }
     .vfm-btn.active { border-color: var(--primary); background: #eef7f2; color: var(--primary); }
 
+    /* Customer Tier Badges */
+    .tier-vip { background: #fef3c7; color: #b45309; padding: 3px 8px; border-radius: 12px; font-weight: 800; font-size: 0.72rem; }
+    .tier-repeat { background: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 12px; font-weight: 800; font-size: 0.72rem; }
+    .tier-new { background: #f1f5f9; color: #475569; padding: 3px 8px; border-radius: 12px; font-weight: 800; font-size: 0.72rem; }
+
     /* Login Screen */
     #login-overlay { position: fixed; inset: 0; background: linear-gradient(135deg, #105634, #ff6b35); z-index: 999; display: flex; align-items: center; justify-content: center; }
     .login-card { background: white; padding: 32px; border-radius: 20px; width: 360px; box-shadow: 0 15px 35px rgba(0,0,0,0.2); text-align: center; }
@@ -302,14 +307,15 @@
 
     <div class="nav-tabs">
       <button class="active" onclick="switchTab('pos')">🍹 Barista POS</button>
-      <button onclick="switchTab('history')">📜 Sales & CRM</button>
+      <button onclick="switchTab('history')">📜 Sales Log</button>
+      <button class="admin-only" onclick="switchTab('crm')">👥 Customer Insights</button>
       <button class="admin-only" onclick="switchTab('feedback')">⭐ Guest Feedback</button>
       <button class="admin-only" onclick="switchTab('reports')">📊 Infographics</button>
       <button class="admin-only" onclick="switchTab('admin-menu')">🍍 Menu & Drinks</button>
       <button class="admin-only" onclick="switchTab('admin-toppings')">🫐 Toppings Admin</button>
       <button class="admin-only" onclick="switchTab('admin-bom')">🧪 Multi-BOM Builder</button>
       <button class="admin-only" onclick="switchTab('admin-inventory')">📦 Grocery Inward</button>
-      <button class="admin-only" onclick="switchTab('admin-users')">👥 Staff CRM</button>
+      <button class="admin-only" onclick="switchTab('admin-users')">🧑‍🍳 Staff Admin</button>
       <button class="admin-only" onclick="switchTab('admin-bulk')">📑 Bulk Excel</button>
     </div>
 
@@ -364,7 +370,7 @@
     </div>
   </div>
 
-  <!-- 2. SALES HISTORY & CRM LOG -->
+  <!-- 2. SALES HISTORY -->
   <section id="history-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -389,7 +395,54 @@
     </div>
   </section>
 
-  <!-- 3. GUEST FEEDBACK & SUGGESTIONS DASHBOARD (NEW) -->
+  <!-- 3. CUSTOMER INSIGHTS & REPEAT VISITS CRM (NEW) -->
+  <section id="crm-view" class="view">
+    <div class="admin-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h3>Guest CRM, Repeat Visits & Loyalty</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted);">Track customer frequency, lifetime spending, preferred juices, and sentiment.</p>
+        </div>
+        <input type="text" id="crm-search-box" placeholder="🔍 Search by Name or Phone..." oninput="filterCustomerCRM()" style="width:260px;" />
+      </div>
+
+      <!-- Quick KPI Counters for CRM -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px; margin:16px 0;">
+        <div style="background:#eef4f0; padding:12px; border-radius:10px; text-align:center;">
+          <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">TOTAL GUESTS</div>
+          <div style="font-size:1.5rem; font-weight:900; color:var(--primary);" id="crm-kpi-total">0</div>
+        </div>
+        <div style="background:#fff0e6; padding:12px; border-radius:10px; text-align:center;">
+          <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">REPEAT GUESTS</div>
+          <div style="font-size:1.5rem; font-weight:900; color:var(--accent);" id="crm-kpi-repeats">0</div>
+        </div>
+        <div style="background:#fef9e7; padding:12px; border-radius:10px; text-align:center;">
+          <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">REPEAT RATE</div>
+          <div style="font-size:1.5rem; font-weight:900; color:#b45309;" id="crm-kpi-rate">0%</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Customer Name</th>
+            <th>Phone Number</th>
+            <th>Status / Tier</th>
+            <th>Total Visits</th>
+            <th>Lifetime Value (LTV)</th>
+            <th>Favorite Drink</th>
+            <th>Last Visited</th>
+            <th>Feedback Avg</th>
+          </tr>
+        </thead>
+        <tbody id="crm-table-body">
+          <tr><td colspan="8">Loading customer insights...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 4. GUEST FEEDBACK & SUGGESTIONS DASHBOARD -->
   <section id="feedback-view" class="view">
     <div class="admin-box">
       <h3>Customer Drink Feedback & Product Wishlist</h3>
@@ -413,7 +466,7 @@
     </div>
   </section>
 
-  <!-- 4. INFOGRAPHICS (ADMIN) -->
+  <!-- 5. INFOGRAPHICS (ADMIN) -->
   <section id="reports-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -447,7 +500,7 @@
     </div>
   </section>
 
-  <!-- 5. MENU ADMIN -->
+  <!-- 6. MENU ADMIN -->
   <section id="admin-menu-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
@@ -479,7 +532,7 @@
     </div>
   </section>
 
-  <!-- 6. TOPPINGS ADMIN -->
+  <!-- 7. TOPPINGS ADMIN -->
   <section id="admin-toppings-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
@@ -505,7 +558,7 @@
     </div>
   </section>
 
-  <!-- 7. MULTI-INGREDIENT BOM BUILDER -->
+  <!-- 8. MULTI-INGREDIENT BOM BUILDER -->
   <section id="admin-bom-view" class="view">
     <div class="admin-box" style="max-width:700px;">
       <h3>Multi-Ingredient Recipe BOM Formulation</h3>
@@ -521,7 +574,7 @@
     </div>
   </section>
 
-  <!-- 8. GROCERY INWARD -->
+  <!-- 9. GROCERY INWARD -->
   <section id="admin-inventory-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
@@ -555,7 +608,7 @@
     </div>
   </section>
 
-  <!-- 9. USER MANAGEMENT -->
+  <!-- 10. USER MANAGEMENT -->
   <section id="admin-users-view" class="view">
     <div class="admin-box" style="max-width:550px;">
       <h3>Register New Staff Member</h3>
@@ -577,7 +630,7 @@
     </div>
   </section>
 
-  <!-- 10. BULK EXCEL -->
+  <!-- 11. BULK EXCEL -->
   <section id="admin-bulk-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
@@ -680,6 +733,7 @@
       drinks: [],
       toppings: [],
       inventory: [],
+      customersCRM: [],
       cart: [],
       selectedDrink: null,
       selectedToppings: [],
@@ -807,6 +861,7 @@
       const map = {
         'pos': 'pos-view',
         'history': 'history-view',
+        'crm': 'crm-view',
         'feedback': 'feedback-view',
         'reports': 'reports-view',
         'admin-menu': 'admin-menu-view',
@@ -829,6 +884,7 @@
       }
 
       if (tab === 'history') loadSalesHistory();
+      if (tab === 'crm') loadCustomerCRM();
       if (tab === 'feedback') loadAdminFeedbackTable();
       if (tab === 'reports') renderReports();
       if (tab === 'admin-menu') renderAdminMenu();
@@ -1126,13 +1182,13 @@
       confetti({ particleCount: 90, spread: 60, origin: { y: 0.5 } });
     }
 
-    // --- SALES HISTORY (WITH JOINED CUSTOMER NAME & PHONE) ---
+    // --- SALES HISTORY ---
     async function loadSalesHistory() {
       const date = document.getElementById('history-date-picker').value;
       const start = `${date}T00:00:00.000Z`;
       const end = `${date}T23:59:59.999Z`;
 
-      const { data: orders, error } = await client.from('orders')
+      const { data: orders } = await client.from('orders')
         .select('*, customers(name, phone), order_items(*)')
         .gte('created_at', start)
         .lte('created_at', end)
@@ -1156,6 +1212,120 @@
           <td>${new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
         </tr>
       `).join('');
+    }
+
+    // --- CUSTOMER CRM & REPEAT VISITS LOGIC (NEW) ---
+    async function loadCustomerCRM() {
+      const tbody = document.getElementById('crm-table-body');
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Calculating guest history & repeat metrics...</td></tr>';
+
+      // Pull all customers with their full historical orders & feedback
+      const { data: customers, error } = await client.from('customers')
+        .select('*, orders(*, order_items(*))')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        tbody.innerHTML = `<tr><td colspan="8" style="color:var(--danger);">Error loading CRM: ${error.message}</td></tr>`;
+        return;
+      }
+
+      if (!customers || !customers.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No customer records logged yet.</td></tr>';
+        return;
+      }
+
+      let repeatCount = 0;
+
+      state.customersCRM = customers.map(c => {
+        const orders = c.orders || [];
+        const visitCount = orders.length;
+        const totalSpent = orders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+
+        if (visitCount > 1) repeatCount++;
+
+        // Determine Customer Tier
+        let tierBadge = '<span class="tier-new">New Guest (1x)</span>';
+        if (visitCount >= 5) {
+          tierBadge = '<span class="tier-vip">VIP Loyalist (5x+)</span>';
+        } else if (visitCount >= 2) {
+          tierBadge = `<span class="tier-repeat">Returning (${visitCount}x)</span>`;
+        }
+
+        // Determine Favorite Juice SKU
+        let drinkMap = {};
+        let ratings = [];
+        orders.forEach(o => {
+          (o.order_items || []).forEach(item => {
+            drinkMap[item.drink_name] = (drinkMap[item.drink_name] || 0) + 1;
+            if (item.feedback_rating) ratings.push(item.feedback_rating);
+          });
+        });
+
+        let favoriteDrink = '-';
+        let highest = 0;
+        for (let drink in drinkMap) {
+          if (drinkMap[drink] > highest) {
+            highest = drinkMap[drink];
+            favoriteDrink = `${drink} (${highest}x)`;
+          }
+        }
+
+        // Average Feedback
+        const avgRating = ratings.length ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1) + ' ★' : '--';
+
+        // Last visit
+        const lastOrder = orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+        const lastVisitDate = lastOrder ? new Date(lastOrder.created_at).toLocaleDateString() : '-';
+
+        return {
+          id: c.id,
+          name: c.name,
+          phone: c.phone,
+          visitCount,
+          totalSpent,
+          tierBadge,
+          favoriteDrink,
+          lastVisitDate,
+          avgRating
+        };
+      });
+
+      // Update KPI Cards
+      document.getElementById('crm-kpi-total').innerText = state.customersCRM.length;
+      document.getElementById('crm-kpi-repeats').innerText = repeatCount;
+      const rate = state.customersCRM.length ? Math.round((repeatCount / state.customersCRM.length) * 100) : 0;
+      document.getElementById('crm-kpi-rate').innerText = `${rate}%`;
+
+      renderCustomerCRMTable(state.customersCRM);
+    }
+
+    function renderCustomerCRMTable(list) {
+      const tbody = document.getElementById('crm-table-body');
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No matching customers.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(c => `
+        <tr>
+          <td><strong>${c.name}</strong></td>
+          <td>${c.phone}</td>
+          <td>${c.tierBadge}</td>
+          <td><strong>${c.visitCount}</strong> order${c.visitCount !== 1 ? 's' : ''}</td>
+          <td style="font-weight:800; color:var(--primary);">₹${c.totalSpent.toLocaleString()}</td>
+          <td>${c.favoriteDrink}</td>
+          <td>${c.lastVisitDate}</td>
+          <td style="color:#d97706; font-weight:800;">${c.avgRating}</td>
+        </tr>
+      `).join('');
+    }
+
+    function filterCustomerCRM() {
+      const q = document.getElementById('crm-search-box').value.trim().toLowerCase();
+      const filtered = state.customersCRM.filter(c => 
+        c.name.toLowerCase().includes(q) || c.phone.includes(q)
+      );
+      renderCustomerCRMTable(filtered);
     }
 
     // --- ADMIN GUEST FEEDBACK TABLE ---
