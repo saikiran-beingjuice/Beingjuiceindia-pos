@@ -67,6 +67,8 @@
       box-shadow: 0 4px 10px rgba(16, 86, 52, 0.25);
     }
 
+    .admin-only { display: none; }
+
     .user-pill {
       display: flex;
       align-items: center;
@@ -210,9 +212,14 @@
     .btn-danger { background: var(--danger); }
     .btn-sm { padding: 6px 10px; font-size: 0.78rem; border-radius: 6px; }
 
+    /* Sortable Table Headers */
+    th.sortable { cursor: pointer; user-select: none; transition: background 0.1s; }
+    th.sortable:hover { background: #e2ede5; }
+    th.sortable::after { content: " ⇅"; font-size: 0.75rem; opacity: 0.6; }
+
     /* Modals */
     .modal { display: none; position: fixed; inset: 0; background: rgba(16, 86, 52, 0.4); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 200; }
-    .modal-box { background: var(--card); padding: 22px; border-radius: 16px; width: 450px; border: 1px solid var(--border); max-width: 92vw; box-shadow: 0 15px 35px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
+    .modal-box { background: var(--card); padding: 22px; border-radius: 16px; width: 460px; border: 1px solid var(--border); max-width: 92vw; box-shadow: 0 15px 35px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
 
     /* Toppings Selection */
     .toppings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
@@ -307,7 +314,8 @@
 
     <div class="nav-tabs">
       <button class="active" onclick="switchTab('pos')">🍹 Barista POS</button>
-    
+      <button onclick="switchTab('history')">📜 Sales History</button>
+      <!-- Admin Only Tabs -->
       <button class="admin-only" onclick="switchTab('crm')">👥 Customer Insights</button>
       <button class="admin-only" onclick="switchTab('feedback')">⭐ Guest Feedback</button>
       <button class="admin-only" onclick="switchTab('reports')">📊 Infographics</button>
@@ -315,6 +323,7 @@
       <button class="admin-only" onclick="switchTab('admin-toppings')">🫐 Toppings Admin</button>
       <button class="admin-only" onclick="switchTab('admin-bom')">🧪 Multi-BOM Builder</button>
       <button class="admin-only" onclick="switchTab('admin-inventory')">📦 Grocery Inward</button>
+      <button class="admin-only" onclick="switchTab('admin-settings')">⚙️ UPI & Settings</button>
       <button class="admin-only" onclick="switchTab('admin-users')">🧑‍🍳 Staff Admin</button>
       <button class="admin-only" onclick="switchTab('admin-bulk')">📑 Bulk Excel</button>
     </div>
@@ -370,22 +379,22 @@
     </div>
   </div>
 
-  <!-- 2. SALES HISTORY -->
+  <!-- 2. SALES HISTORY (Role-Aware: Sensitive Info Masked for Baristas) -->
   <section id="history-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-        <h3>Sales Log & Guest Lookup</h3>
+        <h3>Sales Log & Revenue</h3>
         <input type="date" id="history-date-picker" onchange="loadSalesHistory()" style="width:auto; padding:6px 12px;" />
       </div>
       <table>
         <thead>
           <tr>
             <th>Receipt</th>
-            <th>Customer Name</th>
-            <th>Phone</th>
+            <th class="crm-secret-col">Customer Name</th>
+            <th class="crm-secret-col">Phone</th>
             <th>Barista</th>
-            <th>Total Amount</th>
-            <th>Payment</th>
+            <th>Amount Generated</th>
+            <th>Payment Mode</th>
             <th>Drinks & Addons</th>
             <th>Time</th>
           </tr>
@@ -395,18 +404,23 @@
     </div>
   </section>
 
-  <!-- 3. CUSTOMER INSIGHTS & REPEAT VISITS CRM (NEW) -->
+  <!-- 3. CUSTOMER INSIGHTS & REPEAT VISITS CRM (ADMIN ONLY) -->
   <section id="crm-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
         <div>
           <h3>Guest CRM, Repeat Visits & Loyalty</h3>
-          <p style="font-size:0.85rem; color:var(--text-muted);">Track customer frequency, lifetime spending, preferred juices, and sentiment.</p>
+          <p style="font-size:0.85rem; color:var(--text-muted);">Click any column header to sort A-to-Z or numerically.</p>
         </div>
-        <input type="text" id="crm-search-box" placeholder="🔍 Search by Name or Phone..." oninput="filterCustomerCRM()" style="width:260px;" />
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="date" id="crm-date-start" onchange="loadCustomerCRM()" style="width:auto; padding:6px 10px;" />
+          <span>to</span>
+          <input type="date" id="crm-date-end" onchange="loadCustomerCRM()" style="width:auto; padding:6px 10px;" />
+          <input type="text" id="crm-search-box" placeholder="🔍 Search..." oninput="filterCustomerCRM()" style="width:160px;" />
+        </div>
       </div>
 
-      <!-- Quick KPI Counters for CRM -->
+      <!-- Quick KPI Counters -->
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px; margin:16px 0;">
         <div style="background:#eef4f0; padding:12px; border-radius:10px; text-align:center;">
           <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">TOTAL GUESTS</div>
@@ -425,38 +439,46 @@
       <table>
         <thead>
           <tr>
-            <th>Customer Name</th>
-            <th>Phone Number</th>
-            <th>Status / Tier</th>
-            <th>Total Visits</th>
-            <th>Lifetime Value (LTV)</th>
-            <th>Favorite Drink</th>
-            <th>Last Visited</th>
-            <th>Feedback Avg</th>
+            <th class="sortable" onclick="sortCRM('name')">Customer Name</th>
+            <th class="sortable" onclick="sortCRM('phone')">Phone</th>
+            <th class="sortable" onclick="sortCRM('visitCount')">Total Visits</th>
+            <th class="sortable" onclick="sortCRM('totalSpent')">Lifetime Value (₹)</th>
+            <th class="sortable" onclick="sortCRM('favoriteDrink')">Favorite Drink</th>
+            <th class="sortable" onclick="sortCRM('lastVisitDate')">Last Visited</th>
+            <th class="sortable" onclick="sortCRM('avgRatingNum')">Feedback Avg</th>
           </tr>
         </thead>
         <tbody id="crm-table-body">
-          <tr><td colspan="8">Loading customer insights...</td></tr>
+          <tr><td colspan="7">Loading customer insights...</td></tr>
         </tbody>
       </table>
     </div>
   </section>
 
-  <!-- 4. GUEST FEEDBACK & SUGGESTIONS DASHBOARD -->
+  <!-- 4. GUEST FEEDBACK & SUGGESTIONS DASHBOARD (ADMIN ONLY) -->
   <section id="feedback-view" class="view">
     <div class="admin-box">
-      <h3>Customer Drink Feedback & Product Wishlist</h3>
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Real-time ratings, pricing sentiment, and menu suggestions captured directly after drink settlement.</p>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+        <div>
+          <h3>Customer Drink Feedback & Product Wishlist</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted);">Filter by date range and sort matrix columns A-to-Z.</p>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="date" id="feedback-date-start" onchange="loadAdminFeedbackTable()" style="width:auto; padding:6px 10px;" />
+          <span>to</span>
+          <input type="date" id="feedback-date-end" onchange="loadAdminFeedbackTable()" style="width:auto; padding:6px 10px;" />
+        </div>
+      </div>
       <table>
         <thead>
           <tr>
-            <th>Customer</th>
-            <th>Phone</th>
-            <th>Drink Ordered</th>
-            <th>Rating</th>
-            <th>Value For Money</th>
-            <th>Suggested Fruits / Additions</th>
-            <th>Date</th>
+            <th class="sortable" onclick="sortFeedback('customerName')">Customer</th>
+            <th class="sortable" onclick="sortFeedback('phone')">Phone</th>
+            <th class="sortable" onclick="sortFeedback('drinkName')">Drink Ordered</th>
+            <th class="sortable" onclick="sortFeedback('rating')">Rating</th>
+            <th class="sortable" onclick="sortFeedback('vfm')">Value For Money</th>
+            <th class="sortable" onclick="sortFeedback('suggestion')">Suggested Fruit / Flavor</th>
+            <th class="sortable" onclick="sortFeedback('date')">Date</th>
           </tr>
         </thead>
         <tbody id="admin-feedback-table-body">
@@ -466,7 +488,7 @@
     </div>
   </section>
 
-  <!-- 5. INFOGRAPHICS (ADMIN) -->
+  <!-- 5. INFOGRAPHICS (ADMIN ONLY) -->
   <section id="reports-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -500,7 +522,7 @@
     </div>
   </section>
 
-  <!-- 6. MENU ADMIN -->
+  <!-- 6. MENU ADMIN (COMPLETE HARD DELETE & EDIT) -->
   <section id="admin-menu-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
@@ -523,7 +545,6 @@
             <th>Name</th>
             <th>Price</th>
             <th>Category</th>
-            <th>Status</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -608,7 +629,25 @@
     </div>
   </section>
 
-  <!-- 10. USER MANAGEMENT -->
+  <!-- 10. UPI QR CODE SETTINGS (ADMIN ONLY) -->
+  <section id="admin-settings-view" class="view">
+    <div class="admin-box" style="max-width:550px;">
+      <h3>Storefront UPI QR Code</h3>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:14px;">
+        Upload a picture of your store's GooglePay/PhonePe/Paytm counter QR code. It will pop up whenever a barista chooses UPI.
+      </p>
+
+      <div style="text-align:center; padding:14px; background:#f8faf8; border-radius:12px; margin-bottom:14px;">
+        <img id="current-upi-preview" src="" alt="UPI QR Code" style="max-width:220px; max-height:220px; border-radius:8px; border:1px solid var(--border);" />
+      </div>
+
+      <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:4px;">Upload New QR Image:</label>
+      <input type="file" id="upi-qr-file-input" accept="image/*" />
+      <button class="btn btn-accent" style="margin-top:10px;" onclick="saveUPIQRCode()">Update UPI QR Image</button>
+    </div>
+  </section>
+
+  <!-- 11. USER MANAGEMENT -->
   <section id="admin-users-view" class="view">
     <div class="admin-box" style="max-width:550px;">
       <h3>Register New Staff Member</h3>
@@ -630,7 +669,7 @@
     </div>
   </section>
 
-  <!-- 11. BULK EXCEL -->
+  <!-- 12. BULK EXCEL -->
   <section id="admin-bulk-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
@@ -713,6 +752,24 @@
     </div>
   </div>
 
+  <!-- MODAL: UPI QR CODE DISPLAY POPUP -->
+  <div class="modal" id="upi-qr-modal">
+    <div class="modal-box" style="text-align:center;">
+      <h3 style="color:var(--primary); font-size:1.3rem;">Scan to Pay via UPI</h3>
+      <div style="font-size:1.4rem; font-weight:900; color:var(--accent); margin:6px 0;" id="upi-modal-amount">₹0</div>
+      
+      <div style="margin:16px 0;">
+        <img id="upi-display-qr" src="" alt="UPI QR Code" style="max-width:240px; max-height:240px; border-radius:12px; border:2px solid var(--border); box-shadow:var(--shadow);" />
+      </div>
+
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px;">
+        Ask guest to scan with GPay, PhonePe, Paytm, or BHIM.
+      </p>
+
+      <button class="btn" style="width:100%; padding:12px;" onclick="closeModal('upi-qr-modal')">Close QR & Continue</button>
+    </div>
+  </div>
+
   <!-- MODAL: 3-QUESTION FEEDBACK DIALOG -->
   <div class="modal" id="feedback-modal">
     <div class="modal-box">
@@ -734,35 +791,59 @@
       toppings: [],
       inventory: [],
       customersCRM: [],
+      feedbackList: [],
       cart: [],
+      upiQRUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=beingjuice@upi&pn=BeingJuice&cu=INR',
       selectedDrink: null,
       selectedToppings: [],
       activeCategory: 'ALL',
       selectedPaymentMode: 'UPI',
       currentPlacedOrderId: null,
-      currentPlacedOrderItems: []
+      currentPlacedOrderItems: [],
+      sortDir: {}
     };
 
     let charts = {};
 
     async function init() {
+      const today = new Date().toISOString().split('T')[0];
+      const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      document.getElementById('history-date-picker').value = today;
+      document.getElementById('report-date-picker').value = today;
+      document.getElementById('crm-date-start').value = monthAgo;
+      document.getElementById('crm-date-end').value = today;
+      document.getElementById('feedback-date-start').value = monthAgo;
+      document.getElementById('feedback-date-end').value = today;
+
       await loadStaff();
-      document.getElementById('history-date-picker').value = new Date().toISOString().split('T')[0];
-      document.getElementById('report-date-picker').value = new Date().toISOString().split('T')[0];
+      await loadAppSettings();
+    }
+
+    async function loadAppSettings() {
+      const { data } = await client.from('app_settings').select('*').eq('key', 'upi_qr_url').single();
+      if (data && data.value) {
+        state.upiQRUrl = data.value;
+      }
+      const preview = document.getElementById('current-upi-preview');
+      if (preview) preview.src = state.upiQRUrl;
+    }
+
+    async function saveUPIQRCode() {
+      const fileInput = document.getElementById('upi-qr-file-input');
+      const url = await uploadImageFile(fileInput);
+      if (!url) return alert('Please choose an image file.');
+
+      await client.from('app_settings').upsert({ key: 'upi_qr_url', value: url });
+      state.upiQRUrl = url;
+      document.getElementById('current-upi-preview').src = url;
+      alert('UPI QR Code updated successfully!');
     }
 
     // --- DRAWER CONTROLS ---
-    function openDrawer() {
-      document.getElementById('drawer-overlay').classList.add('active');
-    }
-
-    function closeDrawer() {
-      document.getElementById('drawer-overlay').classList.remove('active');
-    }
-
-    function handleDrawerClick(e) {
-      if (e.target.id === 'drawer-overlay') closeDrawer();
-    }
+    function openDrawer() { document.getElementById('drawer-overlay').classList.add('active'); }
+    function closeDrawer() { document.getElementById('drawer-overlay').classList.remove('active'); }
+    function handleDrawerClick(e) { if (e.target.id === 'drawer-overlay') closeDrawer(); }
 
     // --- FILE UPLOADER ---
     async function uploadImageFile(fileInput) {
@@ -779,7 +860,7 @@
           return pubData.publicUrl;
         }
       } catch (err) {
-        console.warn("Storage upload failed, falling back to data URL:", err);
+        console.warn("Storage upload failed, using Data URL:", err);
       }
 
       return new Promise((resolve) => {
@@ -792,23 +873,10 @@
     // --- AUTH ---
     async function loadStaff() {
       const select = document.getElementById('staff-select');
-      select.innerHTML = '<option value="">Loading staff accounts...</option>';
-
+      select.innerHTML = '<option value="">Loading staff...</option>';
       const { data, error } = await client.from('staff').select('*').eq('active', true);
-      
-      if (error) {
-        console.error("Staff fetch error:", error);
-        select.innerHTML = `<option value="">Error: ${error.message}</option>`;
-        return;
-      }
-
+      if (error) return select.innerHTML = `<option value="">Error: ${error.message}</option>`;
       state.staffList = data || [];
-
-      if (!state.staffList.length) {
-        select.innerHTML = '<option value="">No staff found (run SQL seed)</option>';
-        return;
-      }
-
       select.innerHTML = '<option value="">Select Staff...</option>' +
         state.staffList.map(s => `<option value="${s.id}">${s.name} (${s.role.toUpperCase()})</option>`).join('');
     }
@@ -827,8 +895,14 @@
       document.getElementById('login-overlay').style.display = 'none';
       document.getElementById('current-user-label').innerText = `${staff.name} (${staff.role.toUpperCase()})`;
 
+      // Only show Admin tabs if role === 'admin'
       const adminTabs = document.querySelectorAll('.admin-only');
       adminTabs.forEach(t => t.style.display = (staff.role === 'admin') ? 'inline-block' : 'none');
+
+      // Hide or show Customer Name / Phone column headers in Sales History depending on role
+      document.querySelectorAll('.crm-secret-col').forEach(col => {
+        col.style.display = (staff.role === 'admin') ? 'table-cell' : 'none';
+      });
 
       refreshAllData().then(() => {
         renderCategories();
@@ -855,6 +929,10 @@
     }
 
     function switchTab(tab) {
+      if (state.currentUser && state.currentUser.role !== 'admin' && tab !== 'pos' && tab !== 'history') {
+        tab = 'pos';
+      }
+
       document.querySelectorAll('.nav-tabs button').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
 
@@ -868,6 +946,7 @@
         'admin-toppings': 'admin-toppings-view',
         'admin-bom': 'admin-bom-view',
         'admin-inventory': 'admin-inventory-view',
+        'admin-settings': 'admin-settings-view',
         'admin-users': 'admin-users-view',
         'admin-bulk': 'admin-bulk-view'
       };
@@ -876,13 +955,9 @@
       event.target.classList.add('active');
 
       const fab = document.getElementById('cart-fab-btn');
-      if (tab === 'pos') {
-        fab.style.display = 'flex';
-        renderPOSMenu();
-      } else {
-        fab.style.display = 'none';
-      }
+      fab.style.display = (tab === 'pos') ? 'flex' : 'none';
 
+      if (tab === 'pos') renderPOSMenu();
       if (tab === 'history') loadSalesHistory();
       if (tab === 'crm') loadCustomerCRM();
       if (tab === 'feedback') loadAdminFeedbackTable();
@@ -911,7 +986,7 @@
 
     function renderPOSMenu() {
       const container = document.getElementById('pos-menu-container');
-      const filtered = state.drinks.filter(d => (d.is_active !== false) && (state.activeCategory === 'ALL' || d.category === state.activeCategory));
+      const filtered = state.drinks.filter(d => state.activeCategory === 'ALL' || d.category === state.activeCategory);
 
       if (!filtered.length) {
         container.innerHTML = '<p style="color:var(--text-muted);">No drinks available in this category.</p>';
@@ -1021,9 +1096,7 @@
       renderCart();
     }
 
-    function closeModal(id) {
-      document.getElementById(id).style.display = 'none';
-    }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     // --- PAYMENTS & ORDERS ---
     function openPaymentModal() {
@@ -1044,6 +1117,14 @@
       document.querySelectorAll('.pay-opt-btn').forEach(b => b.classList.remove('active'));
       document.getElementById(`pay-opt-${mode}`).classList.add('active');
       document.getElementById('cash-calc-pane').style.display = (mode === 'CASH') ? 'block' : 'none';
+
+      // Feature 5: Automatically pop up QR Code when UPI is clicked
+      if (mode === 'UPI') {
+        const total = state.cart.reduce((s, i) => s + i.price, 0);
+        document.getElementById('upi-modal-amount').innerText = `₹${total}`;
+        document.getElementById('upi-display-qr').src = state.upiQRUrl;
+        document.getElementById('upi-qr-modal').style.display = 'flex';
+      }
     }
 
     function calculateChange() {
@@ -1124,7 +1205,7 @@
           </label>
           <div class="star-bar" id="stars-${item.id}">
             ${[1, 2, 3, 4, 5].map(star => `
-              <button class="star-btn ${star <= 5 ? 'active' : ''}" onclick="setRating('${item.id}', ${star})">★</button>
+              <button class="star-btn ${star <= 5 ? 'active' : ''}" onclick="setRating('${item.id}',${star})">★</button>
             `).join('')}
           </div>
           <input type="hidden" id="rating-val-${item.id}" value="5" />
@@ -1152,17 +1233,13 @@
     function setRating(itemId, stars) {
       document.getElementById(`rating-val-${itemId}`).value = stars;
       const starBtns = document.querySelectorAll(`#stars-${itemId} .star-btn`);
-      starBtns.forEach((btn, idx) => {
-        btn.classList.toggle('active', idx < stars);
-      });
+      starBtns.forEach((btn, idx) => btn.classList.toggle('active', idx < stars));
     }
 
     function setVFM(itemId, value) {
       document.getElementById(`vfm-val-${itemId}`).value = value;
       const buttons = document.querySelectorAll(`#vfm-${itemId} .vfm-btn`);
-      buttons.forEach(btn => {
-        btn.classList.toggle('active', btn.innerText.includes(value.split(' ')[0]));
-      });
+      buttons.forEach(btn => btn.classList.toggle('active', btn.innerText.includes(value.split(' ')[0])));
     }
 
     async function submitAllDrinkFeedback() {
@@ -1182,7 +1259,7 @@
       confetti({ particleCount: 90, spread: 60, origin: { y: 0.5 } });
     }
 
-    // --- SALES HISTORY ---
+    // --- SALES HISTORY (Feature 4: Non-sensitive for Barista, full details for Admin) ---
     async function loadSalesHistory() {
       const date = document.getElementById('history-date-picker').value;
       const start = `${date}T00:00:00.000Z`;
@@ -1195,18 +1272,20 @@
         .order('created_at', { ascending: false });
 
       const tbody = document.getElementById('history-table-body');
+      const isAdmin = state.currentUser?.role === 'admin';
+
       if (!orders || !orders.length) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No sales recorded on this date.</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="${isAdmin ? 8 : 6}" style="text-align:center; color:var(--text-muted);">No sales recorded on this date.</td></tr>`;
         return;
       }
 
       tbody.innerHTML = orders.map(o => `
         <tr>
           <td><strong>${o.receipt_no || o.id.substring(0,8)}</strong></td>
-          <td>${o.customers?.name || 'Guest'}</td>
-          <td>${o.customers?.phone || '-'}</td>
+          ${isAdmin ? `<td>${o.customers?.name || 'Guest'}</td>` : ''}
+          ${isAdmin ? `<td>${o.customers?.phone || '-'}</td>` : ''}
           <td>${o.barista_name || '-'}</td>
-          <td style="font-weight:800; color:var(--primary);">₹${o.total_amount}</td>
+          <td style="font-weight:800; color:var(--primary); font-size:0.95rem;">₹${o.total_amount}</td>
           <td><span class="drink-cat">${o.payment_method}</span></td>
           <td><small>${(o.order_items || []).map(i => i.drink_name).join(', ')}</small></td>
           <td>${new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
@@ -1214,44 +1293,33 @@
       `).join('');
     }
 
-    // --- CUSTOMER CRM & REPEAT VISITS LOGIC (NEW) ---
+    // --- CUSTOMER CRM WITH DATE FILTER & A-TO-Z SORTING (Features 1 & 2) ---
     async function loadCustomerCRM() {
       const tbody = document.getElementById('crm-table-body');
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Calculating guest history & repeat metrics...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Calculating guest history...</td></tr>';
 
-      // Pull all customers with their full historical orders & feedback
+      const startDate = document.getElementById('crm-date-start').value;
+      const endDate = document.getElementById('crm-date-end').value;
+
       const { data: customers, error } = await client.from('customers')
-        .select('*, orders(*, order_items(*))')
-        .order('created_at', { ascending: false });
+        .select('*, orders(*, order_items(*))');
 
-      if (error) {
-        tbody.innerHTML = `<tr><td colspan="8" style="color:var(--danger);">Error loading CRM: ${error.message}</td></tr>`;
-        return;
-      }
-
-      if (!customers || !customers.length) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No customer records logged yet.</td></tr>';
-        return;
-      }
+      if (error) return tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger);">${error.message}</td></tr>`;
 
       let repeatCount = 0;
 
       state.customersCRM = customers.map(c => {
-        const orders = c.orders || [];
+        // Filter customer orders by selected date range
+        const orders = (c.orders || []).filter(o => {
+          const d = o.created_at.split('T')[0];
+          return (!startDate || d >= startDate) && (!endDate || d <= endDate);
+        });
+
         const visitCount = orders.length;
         const totalSpent = orders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
 
         if (visitCount > 1) repeatCount++;
 
-        // Determine Customer Tier
-        let tierBadge = '<span class="tier-new">New Guest (1x)</span>';
-        if (visitCount >= 5) {
-          tierBadge = '<span class="tier-vip">VIP Loyalist (5x+)</span>';
-        } else if (visitCount >= 2) {
-          tierBadge = `<span class="tier-repeat">Returning (${visitCount}x)</span>`;
-        }
-
-        // Determine Favorite Juice SKU
         let drinkMap = {};
         let ratings = [];
         orders.forEach(o => {
@@ -1270,27 +1338,25 @@
           }
         }
 
-        // Average Feedback
-        const avgRating = ratings.length ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1) + ' ★' : '--';
+        const avgRatingNum = ratings.length ? (ratings.reduce((a, b) => a + b, 0) / ratings.length) : 0;
+        const avgRating = avgRatingNum ? avgRatingNum.toFixed(1) + ' ★' : '--';
 
-        // Last visit
         const lastOrder = orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-        const lastVisitDate = lastOrder ? new Date(lastOrder.created_at).toLocaleDateString() : '-';
+        const lastVisitDate = lastOrder ? lastOrder.created_at.split('T')[0] : '-';
 
         return {
           id: c.id,
-          name: c.name,
-          phone: c.phone,
+          name: c.name || 'Valued Guest',
+          phone: c.phone || '-',
           visitCount,
           totalSpent,
-          tierBadge,
           favoriteDrink,
           lastVisitDate,
+          avgRatingNum,
           avgRating
         };
-      });
+      }).filter(c => c.visitCount > 0); // show only guests with visits in range
 
-      // Update KPI Cards
       document.getElementById('crm-kpi-total').innerText = state.customersCRM.length;
       document.getElementById('crm-kpi-repeats').innerText = repeatCount;
       const rate = state.customersCRM.length ? Math.round((repeatCount / state.customersCRM.length) * 100) : 0;
@@ -1302,7 +1368,7 @@
     function renderCustomerCRMTable(list) {
       const tbody = document.getElementById('crm-table-body');
       if (!list.length) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No matching customers.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No matching customers found for this period.</td></tr>';
         return;
       }
 
@@ -1310,8 +1376,7 @@
         <tr>
           <td><strong>${c.name}</strong></td>
           <td>${c.phone}</td>
-          <td>${c.tierBadge}</td>
-          <td><strong>${c.visitCount}</strong> order${c.visitCount !== 1 ? 's' : ''}</td>
+          <td><strong>${c.visitCount}</strong> visit${c.visitCount !== 1 ? 's' : ''}</td>
           <td style="font-weight:800; color:var(--primary);">₹${c.totalSpent.toLocaleString()}</td>
           <td>${c.favoriteDrink}</td>
           <td>${c.lastVisitDate}</td>
@@ -1322,50 +1387,84 @@
 
     function filterCustomerCRM() {
       const q = document.getElementById('crm-search-box').value.trim().toLowerCase();
-      const filtered = state.customersCRM.filter(c => 
-        c.name.toLowerCase().includes(q) || c.phone.includes(q)
-      );
+      const filtered = state.customersCRM.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q));
       renderCustomerCRMTable(filtered);
     }
 
-    // --- ADMIN GUEST FEEDBACK TABLE ---
+    function sortCRM(field) {
+      state.sortDir[field] = !state.sortDir[field];
+      state.customersCRM.sort((a, b) => {
+        let vA = a[field], vB = b[field];
+        if (typeof vA === 'string') {
+          return state.sortDir[field] ? vA.localeCompare(vB) : vB.localeCompare(vA);
+        }
+        return state.sortDir[field] ? vA - vB : vB - vA;
+      });
+      renderCustomerCRMTable(state.customersCRM);
+    }
+
+    // --- GUEST FEEDBACK WITH DATE FILTER & A-TO-Z SORTING (Features 1 & 2) ---
     async function loadAdminFeedbackTable() {
       const tbody = document.getElementById('admin-feedback-table-body');
       tbody.innerHTML = '<tr><td colspan="7">Loading customer feedback...</td></tr>';
 
+      const startDate = document.getElementById('feedback-date-start').value;
+      const endDate = document.getElementById('feedback-date-end').value;
+
       const { data: items, error } = await client.from('order_items')
         .select('*, orders(created_at, customers(name, phone))')
-        .order('id', { ascending: false })
-        .limit(40);
+        .not('feedback_rating', 'is', null)
+        .order('id', { ascending: false });
 
-      if (error) {
-        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger);">Error loading feedback: ${error.message}</td></tr>`;
-        return;
-      }
+      if (error) return tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger);">${error.message}</td></tr>`;
 
-      if (!items || !items.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No feedback records found.</td></tr>';
-        return;
-      }
+      state.feedbackList = (items || []).map(i => ({
+        id: i.id,
+        customerName: i.orders?.customers?.name || 'Guest',
+        phone: i.orders?.customers?.phone || '-',
+        drinkName: i.drink_name,
+        rating: i.feedback_rating || 0,
+        vfm: i.feedback_vfm || 'Fair',
+        suggestion: i.feedback_suggestion || 'None',
+        date: i.orders?.created_at ? i.orders.created_at.split('T')[0] : '-'
+      })).filter(f => (!startDate || f.date >= startDate) && (!endDate || f.date <= endDate));
 
-      tbody.innerHTML = items.map(i => {
-        const ratingStars = i.feedback_rating ? '★'.repeat(i.feedback_rating) + '☆'.repeat(5 - i.feedback_rating) : 'No rating';
-        const dateStr = i.orders?.created_at ? new Date(i.orders.created_at).toLocaleDateString() : '-';
-        return `
-          <tr>
-            <td><strong>${i.orders?.customers?.name || 'Guest'}</strong></td>
-            <td>${i.orders?.customers?.phone || '-'}</td>
-            <td><strong>${i.drink_name}</strong></td>
-            <td style="color:#d97706; font-size:1.1rem; font-weight:800;">${ratingStars}</td>
-            <td><span class="drink-cat">${i.feedback_vfm || 'Fair'}</span></td>
-            <td>${i.feedback_suggestion || '<span style="color:var(--text-muted);">None</span>'}</td>
-            <td>${dateStr}</td>
-          </tr>
-        `;
-      }).join('');
+      renderFeedbackTable(state.feedbackList);
     }
 
-    // --- MENU ADMIN (CREATE & EDIT DRINKS) ---
+    function renderFeedbackTable(list) {
+      const tbody = document.getElementById('admin-feedback-table-body');
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No feedback records found for this date range.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(i => `
+        <tr>
+          <td><strong>${i.customerName}</strong></td>
+          <td>${i.phone}</td>
+          <td><strong>${i.drinkName}</strong></td>
+          <td style="color:#d97706; font-size:1.1rem; font-weight:800;">${'★'.repeat(i.rating)}${'☆'.repeat(5 - i.rating)}</td>
+          <td><span class="drink-cat">${i.vfm}</span></td>
+          <td>${i.suggestion}</td>
+          <td>${i.date}</td>
+        </tr>
+      `).join('');
+    }
+
+    function sortFeedback(field) {
+      state.sortDir[field] = !state.sortDir[field];
+      state.feedbackList.sort((a, b) => {
+        let vA = a[field], vB = b[field];
+        if (typeof vA === 'string') {
+          return state.sortDir[field] ? vA.localeCompare(vB) : vB.localeCompare(vA);
+        }
+        return state.sortDir[field] ? vA - vB : vB - vA;
+      });
+      renderFeedbackTable(state.feedbackList);
+    }
+
+    // --- MENU ADMIN (Feature 3: Complete Hard Delete) ---
     function renderAdminMenu() {
       const tbody = document.getElementById('admin-menu-body');
       tbody.innerHTML = state.drinks.map(d => `
@@ -1374,10 +1473,9 @@
           <td><strong>${d.name}</strong></td>
           <td>₹${d.base_price}</td>
           <td>${d.category}</td>
-          <td>${d.is_active ? '<span style="color:var(--success); font-weight:800;">ACTIVE</span>' : '<span style="color:var(--danger); font-weight:800;">ARCHIVED</span>'}</td>
           <td>
             <button class="btn btn-sm" onclick="openEditDrinkModal('${d.id}')">Edit</button>
-            <button class="btn btn-danger btn-sm" onclick="toggleDrinkStatus('${d.id}', ${!d.is_active})">${d.is_active ? 'Archive' : 'Restore'}</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteDrinkPermanently('${d.id}', '${d.name.replace(/'/g, "\\'")}')">Delete Item</button>
           </td>
         </tr>
       `).join('');
@@ -1433,8 +1531,11 @@
       renderAdminMenu();
     }
 
-    async function toggleDrinkStatus(id, status) {
-      await client.from('drinks').update({ is_active: status }).eq('id', id);
+    async function deleteDrinkPermanently(id, name) {
+      if (!confirm(`Are you sure you want to permanently delete "${name}" from the database? This cannot be undone.`)) return;
+      const { error } = await client.from('drinks').delete().eq('id', id);
+      if (error) return alert(`Failed to delete: ${error.message}`);
+      alert(`"${name}" was permanently removed.`);
       await refreshAllData();
       renderAdminMenu();
     }
@@ -1485,7 +1586,7 @@
     }
 
     async function removeTopping(id) {
-      if (!confirm('Remove this topping?')) return;
+      if (!confirm('Permanently remove this topping?')) return;
       await client.from('toppings').delete().eq('id', id);
       await refreshAllData();
       renderToppingsAdmin();
@@ -1687,14 +1788,10 @@
       let data = [];
       let filename = '';
       if (type === 'drinks') {
-        data = [
-          { name: "Watermelon Glow", base_price: 180, category: "Hydration", image_url: "https://images.unsplash.com/photo-1589733955941-5eeaf752f6dd?w=500" }
-        ];
+        data = [{ name: "Watermelon Glow", base_price: 180, category: "Hydration", image_url: "https://images.unsplash.com/photo-1589733955941-5eeaf752f6dd?w=500" }];
         filename = 'BeingJuice_Drinks_Sample.xlsx';
       } else {
-        data = [
-          { name: "Fresh Watermelon", stock_qty: 25000, unit: "g" }
-        ];
+        data = [{ name: "Fresh Watermelon", stock_qty: 25000, unit: "g" }];
         filename = 'BeingJuice_Ingredients_Sample.xlsx';
       }
       const ws = XLSX.utils.json_to_sheet(data);
