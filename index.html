@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Being Juice | Master Terminal & Kitchen OS</title>
+  <title>Be the Juice | India Terminal & OS</title>
 
   <!-- External CDNs -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -12,23 +12,26 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <style>
+    /* Be the Juice India Brand Color Palette */
     :root {
-      --primary: #105634;
-      --primary-hover: #1b8a53;
-      --accent: #ff6b35;
-      --accent-hover: #be6939;
-      --bg: #f5f8f5;
+      --btj-pink: #EE3F7F;        /* Main Pink */
+      --btj-pink-hover: #c4245f;  /* Deep Pink */
+      --btj-navy: #21343C;        /* Contrast Ink */
+      --btj-cream: #FFF7F0;       /* Primary Canvas */
+      --btj-amber: #FCB449;       /* Secondary Pop */
+      --btj-lime: #A6CE43;        /* Function Green */
+      --btj-orange: #F68941;      /* Accent Orange */
+      --btj-veg: #0A8A3A;         /* FSSAI Veg-mark Green */
       --card: #ffffff;
-      --border: #e0e9e1;
-      --text: #172b20;
-      --text-muted: #647a6d;
-      --danger: #ef4444;
-      --success: #16a34a;
-      --shadow: 0 8px 24px rgba(16, 86, 52, 0.08);
+      --border: #f0e6dc;
+      --text: #21343C;
+      --text-muted: #74858d;
+      --danger: #e11d48;
+      --shadow: 0 4px 20px rgba(33, 52, 60, 0.05);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: var(--bg); color: var(--text); padding: 14px; min-height: 100vh; padding-bottom: 90px; }
+    body { background: var(--btj-cream); color: var(--btj-navy); padding: 14px; min-height: 100vh; padding-bottom: 95px; }
 
     header {
       display: flex;
@@ -37,34 +40,35 @@
       margin-bottom: 16px;
       padding: 12px 18px;
       background: white;
-      border-radius: 14px;
+      border-radius: 16px;
       border: 1px solid var(--border);
       box-shadow: var(--shadow);
       flex-wrap: wrap;
       gap: 10px;
     }
 
-    .brand-container { display: flex; align-items: baseline; gap: 8px; }
-    .brand { font-size: 1.45rem; font-weight: 900; letter-spacing: -0.5px; color: var(--primary); text-transform: uppercase; }
-    .brand-tag { font-size: 0.72rem; font-weight: 800; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; background: #fff0e6; padding: 3px 8px; border-radius: 20px; }
+    .brand-container { display: flex; align-items: center; gap: 10px; }
+    .brand-logo-text { font-size: 1.5rem; font-weight: 900; color: var(--btj-pink); letter-spacing: -0.5px; }
+    .brand-logo-text span { color: var(--btj-navy); font-weight: 700; font-size: 1.1rem; }
+    .brand-pill { font-size: 0.7rem; font-weight: 800; color: var(--btj-navy); background: #fdf0e4; padding: 4px 9px; border-radius: 20px; letter-spacing: 0.5px; }
 
     .nav-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
     .nav-tabs button {
       padding: 8px 14px;
       border: 1px solid var(--border);
-      background: var(--bg);
+      background: white;
       cursor: pointer;
       border-radius: 10px;
       font-weight: 700;
-      font-size: 0.83rem;
-      color: var(--text);
+      font-size: 0.82rem;
+      color: var(--btj-navy);
       transition: all 0.15s;
     }
     .nav-tabs button.active {
-      background: var(--primary);
+      background: var(--btj-pink);
       color: white;
-      border-color: var(--primary);
-      box-shadow: 0 4px 10px rgba(16, 86, 52, 0.25);
+      border-color: var(--btj-pink);
+      box-shadow: 0 4px 12px rgba(238, 63, 127, 0.25);
     }
 
     .admin-only { display: none; }
@@ -73,13 +77,13 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      background: #e9f5ed;
+      background: #fdf0f5;
       padding: 6px 14px;
       border-radius: 30px;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       font-weight: 700;
-      color: var(--primary);
-      border: 1px solid #c9e3d0;
+      color: var(--btj-pink);
+      border: 1px solid #f9d8e5;
     }
 
     .view { display: none; }
@@ -88,7 +92,7 @@
     /* Category Pill Selector */
     .category-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 12px; }
     .cat-btn {
-      padding: 7px 15px;
+      padding: 7px 16px;
       border-radius: 30px;
       background: white;
       border: 1px solid var(--border);
@@ -96,38 +100,58 @@
       font-size: 0.85rem;
       font-weight: 700;
       white-space: nowrap;
+      color: var(--btj-navy);
       transition: 0.15s;
     }
-    .cat-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+    .cat-btn.active { background: var(--btj-navy); color: white; border-color: var(--btj-navy); }
 
-    /* Menu Grid */
+    /* Clean Minimalist Drink Cards */
     .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
     .drink-card {
-      background: var(--card);
+      background: white;
       border: 1px solid var(--border);
-      border-radius: 14px;
+      border-radius: 16px;
       overflow: hidden;
       cursor: pointer;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-      transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+      box-shadow: var(--shadow);
+      transition: transform 0.15s, border-color 0.15s;
     }
-    .drink-card:hover { transform: translateY(-3px); border-color: var(--primary); box-shadow: var(--shadow); }
-    .drink-img-wrap { width: 100%; height: 130px; background: #eef4f0; overflow: hidden; }
+    .drink-card:hover { transform: translateY(-3px); border-color: var(--btj-pink); }
+    .drink-img-wrap { width: 100%; height: 130px; background: #fff8f3; overflow: hidden; position: relative; }
     .drink-img { width: 100%; height: 100%; object-fit: cover; }
-    .drink-info { padding: 12px; display: flex; flex-direction: column; gap: 4px; }
-    .drink-cat { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; color: var(--accent); }
-    .drink-title { font-size: 0.95rem; font-weight: 800; color: var(--text); line-height: 1.25; }
-    .drink-price { font-size: 1.15rem; font-weight: 900; color: var(--primary); margin-top: 6px; }
+    .veg-dot {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      width: 14px;
+      height: 14px;
+      border: 1.5px solid var(--btj-veg);
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 3px;
+    }
+    .veg-dot::after { content: ""; width: 6px; height: 6px; background: var(--btj-veg); border-radius: 50%; }
 
-    /* Floating Cart FAB */
+    .drink-info { padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+    .drink-cat { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; color: var(--btj-orange); }
+    .drink-title { font-size: 0.95rem; font-weight: 800; color: var(--btj-navy); line-height: 1.25; }
+    
+    /* Brand Truth: Calories equal visual weight to price */
+    .drink-meta { display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px; }
+    .drink-price { font-size: 1.15rem; font-weight: 900; color: var(--btj-pink); }
+    .drink-kcal { font-size: 0.8rem; font-weight: 800; color: var(--btj-navy); background: #fdf5ee; padding: 2px 6px; border-radius: 6px; }
+
+    /* Floating Cart Badge */
     .cart-fab {
       position: fixed;
       bottom: 24px;
       right: 24px;
-      background: var(--primary);
+      background: var(--btj-pink);
       color: white;
       border: none;
       border-radius: 50px;
@@ -135,16 +159,16 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      font-size: 1rem;
+      font-size: 0.95rem;
       font-weight: 800;
-      box-shadow: 0 10px 25px rgba(16, 86, 52, 0.35);
+      box-shadow: 0 10px 25px rgba(238, 63, 127, 0.35);
       cursor: pointer;
       z-index: 90;
-      transition: transform 0.15s ease, background 0.15s ease;
+      transition: transform 0.15s ease;
     }
-    .cart-fab:hover { transform: scale(1.04); background: var(--primary-hover); }
+    .cart-fab:hover { transform: scale(1.03); background: var(--btj-pink-hover); }
     .cart-badge {
-      background: var(--accent);
+      background: var(--btj-navy);
       color: white;
       font-size: 0.8rem;
       font-weight: 900;
@@ -152,12 +176,12 @@
       border-radius: 20px;
     }
 
-    /* Drawer */
+    /* Minimal Flyout Drawer */
     .drawer-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(16, 86, 52, 0.35);
-      backdrop-filter: blur(3px);
+      background: rgba(33, 52, 60, 0.4);
+      backdrop-filter: blur(4px);
       z-index: 150;
       display: none;
       justify-content: flex-end;
@@ -169,34 +193,32 @@
       width: 420px;
       max-width: 90vw;
       height: 100%;
-      box-shadow: -10px 0 30px rgba(0,0,0,0.15);
+      box-shadow: -10px 0 30px rgba(0,0,0,0.1);
       padding: 24px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       animation: slideLeft 0.2s ease-out;
     }
-    @keyframes slideLeft {
-      from { transform: translateX(100%); }
-      to { transform: translateX(0); }
-    }
+    @keyframes slideLeft { from { transform: translateX(100%); } to { transform: translateX(0); } }
 
-    .drawer-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 12px; }
+    .drawer-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--btj-cream); padding-bottom: 12px; }
     .cart-items { flex: 1; overflow-y: auto; padding: 14px 0; }
     .cart-item { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 12px; border-bottom: 1px dashed var(--border); padding-bottom: 8px; }
 
-    /* Inputs & Buttons */
+    /* Inputs, Buttons & Tables */
     input, select {
       width: 100%;
       padding: 10px 12px;
       border: 1px solid var(--border);
       border-radius: 8px;
       font-size: 0.9rem;
-      background: #fdfdfc;
+      background: #fffdfb;
+      color: var(--btj-navy);
     }
 
     .btn {
-      background: var(--primary);
+      background: var(--btj-navy);
       color: white;
       border: none;
       padding: 10px 16px;
@@ -206,20 +228,24 @@
       font-size: 0.88rem;
       transition: all 0.15s ease;
     }
-    .btn:hover { background: var(--primary-hover); }
-    .btn-accent { background: var(--accent); }
-    .btn-accent:hover { background: var(--accent-hover); }
+    .btn:hover { background: #16242a; }
+    .btn-pink { background: var(--btj-pink); }
+    .btn-pink:hover { background: var(--btj-pink-hover); }
     .btn-danger { background: var(--danger); }
     .btn-sm { padding: 6px 10px; font-size: 0.78rem; border-radius: 6px; }
 
-    /* Sortable Table Headers */
-    th.sortable { cursor: pointer; user-select: none; transition: background 0.1s; }
-    th.sortable:hover { background: #e2ede5; }
-    th.sortable::after { content: " ⇅"; font-size: 0.75rem; opacity: 0.6; }
+    .admin-layout { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+    .admin-box { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
+    .admin-box h3 { font-size: 1.05rem; color: var(--btj-navy); margin-bottom: 12px; font-weight: 900; }
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; margin-top: 10px; overflow: hidden; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+    th { background: #fff5ee; font-weight: 800; color: var(--btj-navy); }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { background: #ffe9da; }
 
     /* Modals */
-    .modal { display: none; position: fixed; inset: 0; background: rgba(16, 86, 52, 0.4); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 200; }
-    .modal-box { background: var(--card); padding: 22px; border-radius: 16px; width: 460px; border: 1px solid var(--border); max-width: 92vw; box-shadow: 0 15px 35px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(33, 52, 60, 0.45); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 200; }
+    .modal-box { background: white; padding: 24px; border-radius: 18px; width: 460px; border: 1px solid var(--border); max-width: 92vw; box-shadow: 0 15px 35px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
 
     /* Toppings Selection */
     .toppings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
@@ -233,60 +259,27 @@
       cursor: pointer;
       transition: 0.15s;
     }
-    .topping-card.selected { border-color: var(--accent); background: #fff8f5; }
+    .topping-card.selected { border-color: var(--btj-pink); background: #fff4f8; }
     .topping-img { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; }
 
     .bom-row { display: grid; grid-template-columns: 2fr 1fr 40px; gap: 8px; margin-bottom: 8px; align-items: center; }
 
-    /* Tables & Admin Layout */
-    .admin-layout { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
-    .admin-box { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
-    .admin-box h3 { font-size: 1rem; color: var(--primary); margin-bottom: 12px; font-weight: 800; }
-    table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 10px; margin-top: 10px; overflow: hidden; }
-    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
-    th { background: #eef4f0; font-weight: 800; color: var(--primary); }
-
     /* Star rating */
     .star-bar { display: flex; gap: 12px; margin: 10px 0 14px 0; }
-    .star-btn {
-      font-size: 2.3rem;
-      cursor: pointer;
-      border: none;
-      background: none;
-      color: #cbd5e1;
-      transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.15s ease;
-      line-height: 1;
-    }
-    .star-btn:hover { transform: scale(1.25); }
-    .star-btn.active {
-      color: #fbbf24;
-      filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.7));
-      transform: scale(1.2);
-    }
+    .star-btn { font-size: 2.3rem; cursor: pointer; border: none; background: none; color: #cbd5e1; line-height: 1; }
+    .star-btn.active { color: var(--btj-amber); filter: drop-shadow(0 0 8px rgba(252, 180, 73, 0.6)); transform: scale(1.15); }
 
-    /* VFM Selector */
     .vfm-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 14px 0; }
-    .vfm-btn {
-      padding: 8px;
-      border-radius: 8px;
-      border: 1.5px solid var(--border);
-      background: white;
-      cursor: pointer;
-      font-weight: 700;
-      font-size: 0.82rem;
-      color: var(--text);
-      transition: all 0.15s ease;
-    }
-    .vfm-btn.active { border-color: var(--primary); background: #eef7f2; color: var(--primary); }
+    .vfm-btn { padding: 8px; border-radius: 8px; border: 1.5px solid var(--border); background: white; cursor: pointer; font-weight: 700; font-size: 0.82rem; }
+    .vfm-btn.active { border-color: var(--btj-pink); background: #fff0f5; color: var(--btj-pink); }
 
-    /* Customer Tier Badges */
-    .tier-vip { background: #fef3c7; color: #b45309; padding: 3px 8px; border-radius: 12px; font-weight: 800; font-size: 0.72rem; }
-    .tier-repeat { background: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 12px; font-weight: 800; font-size: 0.72rem; }
-    .tier-new { background: #f1f5f9; color: #475569; padding: 3px 8px; border-radius: 12px; font-weight: 800; font-size: 0.72rem; }
+    /* Accounting Outflow Badge */
+    .badge-outflow { background: #ffe4e6; color: var(--danger); font-weight: 800; padding: 4px 8px; border-radius: 6px; }
+    .badge-inflow { background: #e6f7ec; color: var(--btj-veg); font-weight: 800; padding: 4px 8px; border-radius: 6px; }
 
     /* Login Screen */
-    #login-overlay { position: fixed; inset: 0; background: linear-gradient(135deg, #105634, #ff6b35); z-index: 999; display: flex; align-items: center; justify-content: center; }
-    .login-card { background: white; padding: 32px; border-radius: 20px; width: 360px; box-shadow: 0 15px 35px rgba(0,0,0,0.2); text-align: center; }
+    #login-overlay { position: fixed; inset: 0; background: linear-gradient(135deg, var(--btj-navy), var(--btj-pink)); z-index: 999; display: flex; align-items: center; justify-content: center; }
+    .login-card { background: white; padding: 36px; border-radius: 20px; width: 360px; box-shadow: 0 15px 35px rgba(0,0,0,0.2); text-align: center; }
   </style>
 </head>
 <body>
@@ -294,13 +287,15 @@
   <!-- 0. LOGIN OVERLAY -->
   <div id="login-overlay">
     <div class="login-card">
-      <div class="brand" style="font-size:1.8rem; margin-bottom:4px;">Being Juice</div>
-      <div class="brand-tag" style="margin-bottom:20px; display:inline-block;">Gamified POS & Terminal</div>
+      <div class="brand-logo-text" style="font-size:2rem; margin-bottom:4px;">Be <span>the Juice</span></div>
+      <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted); margin-bottom:20px; text-transform:uppercase; letter-spacing:1px;">
+        Real fruit. No apologies.
+      </div>
 
       <select id="staff-select" style="width:100%; padding:12px; margin-bottom:12px; border:1px solid var(--border); border-radius:8px; font-weight:700;"></select>
-      <input type="password" id="staff-pin" placeholder="Enter PIN / Passcode" style="width:100%; padding:12px; margin-bottom:14px; border:1px solid var(--border); border-radius:8px; text-align:center; letter-spacing:4px; font-size:1.2rem;" />
+      <input type="password" id="staff-pin" placeholder="Enter PIN" style="width:100%; padding:12px; margin-bottom:14px; border:1px solid var(--border); border-radius:8px; text-align:center; letter-spacing:4px; font-size:1.2rem;" />
 
-      <button class="btn btn-accent" style="width:100%; padding:14px; font-size:1rem;" onclick="attemptLogin()">Clock In / Start Shift 🚀</button>
+      <button class="btn btn-pink" style="width:100%; padding:14px; font-size:1rem;" onclick="attemptLogin()">Clock In / Access</button>
       <div id="login-error" style="color:var(--danger); font-size:0.85rem; font-weight:700; margin-top:10px;"></div>
     </div>
   </div>
@@ -308,24 +303,25 @@
   <!-- HEADER -->
   <header>
     <div class="brand-container">
-      <div class="brand">Being Juice</div>
-      <div class="brand-tag">Terminal</div>
+      <div class="brand-logo-text">Be <span>the Juice</span></div>
+      <div class="brand-pill">India · 2026</div>
     </div>
 
     <div class="nav-tabs">
       <button class="active" onclick="switchTab('pos')">🍹 Barista POS</button>
+      <button onclick="switchTab('expense-entry')">💸 Log Expense</button>
       <button onclick="switchTab('history')">📜 Sales History</button>
-      <!-- Admin Only Tabs -->
+      <!-- Admin Only Navigation -->
+      <button class="admin-only" onclick="switchTab('accounting')">📑 Accounting Ledger</button>
       <button class="admin-only" onclick="switchTab('crm')">👥 Customer Insights</button>
       <button class="admin-only" onclick="switchTab('feedback')">⭐ Guest Feedback</button>
       <button class="admin-only" onclick="switchTab('reports')">📊 Infographics</button>
       <button class="admin-only" onclick="switchTab('admin-menu')">🍍 Menu & Drinks</button>
-      <button class="admin-only" onclick="switchTab('admin-toppings')">🫐 Toppings Admin</button>
+      <button class="admin-only" onclick="switchTab('admin-toppings')">🫐 Boosters Admin</button>
       <button class="admin-only" onclick="switchTab('admin-bom')">🧪 Multi-BOM Builder</button>
       <button class="admin-only" onclick="switchTab('admin-inventory')">📦 Grocery Inward</button>
       <button class="admin-only" onclick="switchTab('admin-settings')">⚙️ UPI & Settings</button>
       <button class="admin-only" onclick="switchTab('admin-users')">🧑‍🍳 Staff Admin</button>
-      <button class="admin-only" onclick="switchTab('admin-bulk')">📑 Bulk Excel</button>
     </div>
 
     <div class="user-pill">
@@ -334,13 +330,12 @@
     </div>
   </header>
 
-  <!-- 1. BARISTA POS -->
+  <!-- 1. BARISTA POS (MINIMAL CLEAN GRID) -->
   <section id="pos-view" class="view active">
     <div class="category-scroll" id="cat-pill-container">
       <button class="cat-btn active" onclick="filterCategory('ALL')">All Blends</button>
     </div>
-
-    <div class="menu-grid" id="pos-menu-container">Loading cold-pressed juices...</div>
+    <div class="menu-grid" id="pos-menu-container">Loading fresh blends...</div>
   </section>
 
   <!-- FLOATING CART FAB -->
@@ -355,7 +350,7 @@
     <div class="drawer-content">
       <div>
         <div class="drawer-header">
-          <h3 style="color:var(--primary); font-weight:900;">Active Ticket 🥤</h3>
+          <h3 style="color:var(--btj-navy); font-weight:900;">Active Ticket 🥤</h3>
           <button onclick="closeDrawer()" style="background:none; border:none; font-size:1.6rem; cursor:pointer; font-weight:800; color:var(--text-muted);">✕</button>
         </div>
 
@@ -368,18 +363,106 @@
       </div>
 
       <div>
-        <div style="display:flex; justify-content:space-between; font-weight:900; font-size:1.35rem; color:var(--primary); margin:12px 0;">
+        <div style="display:flex; justify-content:space-between; font-weight:900; font-size:1.35rem; color:var(--btj-navy); margin:12px 0;">
           <span>Total:</span>
           <span id="cart-total-amt">₹0</span>
         </div>
-        <button class="btn btn-accent" style="width:100%; padding:15px; font-size:1.05rem;" onclick="openPaymentModal()">
+        <button class="btn btn-pink" style="width:100%; padding:15px; font-size:1.05rem;" onclick="openPaymentModal()">
           Settle Order ✨
         </button>
       </div>
     </div>
   </div>
 
-  <!-- 2. SALES HISTORY (Role-Aware: Sensitive Info Masked for Baristas) -->
+  <!-- 2. STAFF EXPENSE ENTRY (NEW) -->
+  <section id="expense-entry-view" class="view">
+    <div class="admin-box" style="max-width:520px; margin: 0 auto;">
+      <h3>Record Storefront Expense</h3>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:14px;">
+        Staff can record day-to-day out-of-pocket store costs (produce, ice, repairs, packaging) with receipt photo uploads.
+      </p>
+
+      <label style="font-size:0.8rem; font-weight:800;">Expense Category:</label>
+      <select id="exp-category" style="margin-bottom:12px;">
+        <option value="Produce & Fruits">Fresh Produce & Fruits (Mandi)</option>
+        <option value="Dairy, Ice & Boosters">Dairy, Ice & Boosters</option>
+        <option value="Packaging & Straws">Bottles, Cups & Packaging</option>
+        <option value="Repairs & Kitchen Maintenance">Blender / Kitchen Maintenance</option>
+        <option value="Store Utilities & Logistics">Store Utilities / Local Transport</option>
+        <option value="Other Misc">Other Miscellaneous</option>
+      </select>
+
+      <label style="font-size:0.8rem; font-weight:800;">Amount Spent (₹):</label>
+      <input type="number" id="exp-amount" placeholder="e.g. 850" style="margin-bottom:12px;" />
+
+      <label style="font-size:0.8rem; font-weight:800;">Paid Via:</label>
+      <select id="exp-paymode" style="margin-bottom:12px;">
+        <option value="Cash (Counter Drawer)">Cash (From Counter Drawer)</option>
+        <option value="UPI / Online">UPI / QR</option>
+        <option value="Personal Paid (Reimbursement)">Personal Paid (To be Reimbursed)</option>
+      </select>
+
+      <label style="font-size:0.8rem; font-weight:800;">Notes / Vendor Name:</label>
+      <input type="text" id="exp-notes" placeholder="e.g. 10kg Valencia Oranges from local vendor" style="margin-bottom:12px;" />
+
+      <label style="font-size:0.8rem; font-weight:800;">Upload Receipt / Bill Photo:</label>
+      <input type="file" id="exp-receipt-file" accept="image/*" style="margin-bottom:14px;" />
+
+      <button class="btn btn-pink" style="width:100%; padding:14px;" onclick="submitStaffExpense()">Submit Expense to Ledger</button>
+    </div>
+  </section>
+
+  <!-- 3. ADMIN ACCOUNTING & EXPENSES LEDGER (NEW) -->
+  <section id="accounting-view" class="view">
+    <div class="admin-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h3>Store Accounting & Cashflow Reconciliation</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted);">Real-time income vs. expense tracking with downloadable bill receipts.</p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <input type="date" id="acc-date-start" onchange="loadAccountingData()" style="width:auto; padding:6px 10px;" />
+          <span>to</span>
+          <input type="date" id="acc-date-end" onchange="loadAccountingData()" style="width:auto; padding:6px 10px;" />
+        </div>
+      </div>
+
+      <!-- Financial Reconciliation Cards -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin:16px 0;">
+        <div style="background:#eef7f0; padding:14px; border-radius:12px; text-align:center;">
+          <div style="font-size:0.75rem; font-weight:800; color:var(--btj-veg);">TOTAL SALES (INFLOW)</div>
+          <div style="font-size:1.6rem; font-weight:900; color:var(--btj-veg);" id="acc-inflow">₹0</div>
+        </div>
+        <div style="background:#fff1f2; padding:14px; border-radius:12px; text-align:center;">
+          <div style="font-size:0.75rem; font-weight:800; color:var(--danger);">TOTAL EXPENSES (OUTFLOW)</div>
+          <div style="font-size:1.6rem; font-weight:900; color:var(--danger);" id="acc-outflow">₹0</div>
+        </div>
+        <div style="background:#fff8f0; padding:14px; border-radius:12px; text-align:center;">
+          <div style="font-size:0.75rem; font-weight:800; color:var(--btj-navy);">NET OPERATING MARGIN</div>
+          <div style="font-size:1.6rem; font-weight:900; color:var(--btj-navy);" id="acc-net">₹0</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Category</th>
+            <th>Amount (₹)</th>
+            <th>Payment Mode</th>
+            <th>Submitted By</th>
+            <th>Notes</th>
+            <th>Receipt / Bill</th>
+          </tr>
+        </thead>
+        <tbody id="accounting-table-body">
+          <tr><td colspan="7">Loading accounting entries...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 4. SALES HISTORY (Role-Aware) -->
   <section id="history-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -404,35 +487,19 @@
     </div>
   </section>
 
-  <!-- 3. CUSTOMER INSIGHTS & REPEAT VISITS CRM (ADMIN ONLY) -->
+  <!-- 5. CUSTOMER INSIGHTS CRM (ADMIN ONLY) -->
   <section id="crm-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
         <div>
-          <h3>Guest CRM, Repeat Visits & Loyalty</h3>
-          <p style="font-size:0.85rem; color:var(--text-muted);">Click any column header to sort A-to-Z or numerically.</p>
+          <h3>Guest CRM & Repeat Loyalty</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted);">Sort columns A-to-Z or numerically.</p>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
           <input type="date" id="crm-date-start" onchange="loadCustomerCRM()" style="width:auto; padding:6px 10px;" />
           <span>to</span>
           <input type="date" id="crm-date-end" onchange="loadCustomerCRM()" style="width:auto; padding:6px 10px;" />
           <input type="text" id="crm-search-box" placeholder="🔍 Search..." oninput="filterCustomerCRM()" style="width:160px;" />
-        </div>
-      </div>
-
-      <!-- Quick KPI Counters -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px; margin:16px 0;">
-        <div style="background:#eef4f0; padding:12px; border-radius:10px; text-align:center;">
-          <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">TOTAL GUESTS</div>
-          <div style="font-size:1.5rem; font-weight:900; color:var(--primary);" id="crm-kpi-total">0</div>
-        </div>
-        <div style="background:#fff0e6; padding:12px; border-radius:10px; text-align:center;">
-          <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">REPEAT GUESTS</div>
-          <div style="font-size:1.5rem; font-weight:900; color:var(--accent);" id="crm-kpi-repeats">0</div>
-        </div>
-        <div style="background:#fef9e7; padding:12px; border-radius:10px; text-align:center;">
-          <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">REPEAT RATE</div>
-          <div style="font-size:1.5rem; font-weight:900; color:#b45309;" id="crm-kpi-rate">0%</div>
         </div>
       </div>
 
@@ -455,7 +522,7 @@
     </div>
   </section>
 
-  <!-- 4. GUEST FEEDBACK & SUGGESTIONS DASHBOARD (ADMIN ONLY) -->
+  <!-- 6. GUEST FEEDBACK (ADMIN ONLY) -->
   <section id="feedback-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
@@ -488,7 +555,7 @@
     </div>
   </section>
 
-  <!-- 5. INFOGRAPHICS (ADMIN ONLY) -->
+  <!-- 7. INFOGRAPHICS (ADMIN ONLY) -->
   <section id="reports-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -498,15 +565,15 @@
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:16px;">
         <div style="background:#eef4f0; padding:14px; border-radius:10px; text-align:center;">
           <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">SALES</div>
-          <div style="font-size:1.6rem; font-weight:900; color:var(--primary);" id="kpi-rev">₹0</div>
+          <div style="font-size:1.6rem; font-weight:900; color:var(--btj-navy);" id="kpi-rev">₹0</div>
         </div>
-        <div style="background:#fff0e6; padding:14px; border-radius:10px; text-align:center;">
+        <div style="background:#fff0f5; padding:14px; border-radius:10px; text-align:center;">
           <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">DRINKS BLENDED</div>
-          <div style="font-size:1.6rem; font-weight:900; color:var(--accent);" id="kpi-drinks">0</div>
+          <div style="font-size:1.6rem; font-weight:900; color:var(--btj-pink);" id="kpi-drinks">0</div>
         </div>
         <div style="background:#fef9e7; padding:14px; border-radius:10px; text-align:center;">
           <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">AVG DRINK RATING</div>
-          <div style="font-size:1.6rem; font-weight:900; color:#b45309;" id="kpi-rating">--</div>
+          <div style="font-size:1.6rem; font-weight:900; color:var(--btj-amber);" id="kpi-rating">--</div>
         </div>
       </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
@@ -522,17 +589,18 @@
     </div>
   </section>
 
-  <!-- 6. MENU ADMIN (COMPLETE HARD DELETE & EDIT) -->
+  <!-- 8. MENU ADMIN (COMPLETE HARD DELETE & EDIT) -->
   <section id="admin-menu-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
-        <h3>Create / Add Drink</h3>
-        <input type="text" id="new-drink-name" placeholder="Drink Name" />
-        <input type="number" id="new-drink-price" placeholder="Base Price (₹)" />
-        <input type="text" id="new-drink-cat" placeholder="Category (e.g. Detox, Vitality)" />
+        <h3>Create Drink</h3>
+        <input type="text" id="new-drink-name" placeholder="Drink Name (e.g. Kokum Down)" />
+        <input type="number" id="new-drink-price" placeholder="Price in ₹" />
+        <input type="number" id="new-drink-kcal" placeholder="Calories (kcal)" value="140" />
+        <input type="text" id="new-drink-cat" placeholder="Category (e.g. Hydration, Energy)" />
         <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:4px;">Upload Drink Image:</label>
         <input type="file" id="new-drink-file" accept="image/*" />
-        <button class="btn btn-accent" style="margin-top:10px;" onclick="addNewDrink()">Add to Menu</button>
+        <button class="btn btn-pink" style="margin-top:10px;" onclick="addNewDrink()">Add to Menu</button>
       </div>
     </div>
 
@@ -544,6 +612,7 @@
             <th>Photo</th>
             <th>Name</th>
             <th>Price</th>
+            <th>Calories</th>
             <th>Category</th>
             <th>Actions</th>
           </tr>
@@ -553,62 +622,62 @@
     </div>
   </section>
 
-  <!-- 7. TOPPINGS ADMIN -->
+  <!-- 9. BOOSTERS & TOPPINGS ADMIN -->
   <section id="admin-toppings-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
-        <h3>Add New Topping / Booster</h3>
-        <input type="text" id="new-top-name" placeholder="Topping Name (e.g. Boba Pearls)" />
-        <input type="number" id="new-top-price" placeholder="Extra Price (₹)" />
-        <select id="new-top-inv-select"><option value="">Select Linked Inventory Item</option></select>
-        <input type="number" id="new-top-qty" placeholder="Inventory Qty Deducted (e.g. 30g)" />
-        <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:4px;">Topping Image:</label>
+        <h3>Add Booster / Add-on</h3>
+        <input type="text" id="new-top-name" placeholder="Name (e.g. Whey Protein Isolate)" />
+        <input type="number" id="new-top-price" placeholder="Price (₹)" />
+        <select id="new-top-inv-select"><option value="">Select Linked Inventory SKU</option></select>
+        <input type="number" id="new-top-qty" placeholder="Qty Deducted per Serving (e.g. 25g)" />
+        <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:4px;">Booster Image:</label>
         <input type="file" id="new-top-file" accept="image/*" />
-        <button class="btn btn-accent" style="margin-top:10px;" onclick="addNewTopping()">Save Topping</button>
+        <button class="btn btn-pink" style="margin-top:10px;" onclick="addNewTopping()">Save Booster</button>
       </div>
     </div>
 
     <div class="admin-box">
-      <h3>Available Toppings</h3>
+      <h3>Available Boosters</h3>
       <table>
         <thead>
-          <tr><th>Image</th><th>Name</th><th>Price</th><th>Linked Ingredient</th><th>Qty Used</th><th>Action</th></tr>
+          <tr><th>Image</th><th>Name</th><th>Price</th><th>Linked SKU</th><th>Qty</th><th>Action</th></tr>
         </thead>
         <tbody id="admin-toppings-body"></tbody>
       </table>
     </div>
   </section>
 
-  <!-- 8. MULTI-INGREDIENT BOM BUILDER -->
+  <!-- 10. MULTI-BOM BUILDER -->
   <section id="admin-bom-view" class="view">
     <div class="admin-box" style="max-width:700px;">
       <h3>Multi-Ingredient Recipe BOM Formulation</h3>
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Select a drink and add multiple ingredients with their deduction quantities in one save.</p>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Select a drink and link its whole ingredients with deduction quantities.</p>
       
       <select id="multi-bom-drink-select" onchange="loadExistingDrinkBOM()"><option value="">Choose Drink...</option></select>
 
       <div id="bom-rows-container" style="margin:14px 0;"></div>
 
       <button class="btn btn-sm" onclick="addBOMRow()">+ Add Ingredient Row</button>
-      <button class="btn btn-accent" style="float:right;" onclick="saveMultiBOM()">Save Complete Recipe BOM</button>
+      <button class="btn btn-pink" style="float:right;" onclick="saveMultiBOM()">Save Complete Recipe BOM</button>
       <div style="clear:both;"></div>
     </div>
   </section>
 
-  <!-- 9. GROCERY INWARD -->
+  <!-- 11. GROCERY INWARD -->
   <section id="admin-inventory-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
         <h3>Record Bulk Grocery Inward</h3>
         <select id="inward-inv-select"><option value="">Select Ingredient</option></select>
-        <input type="number" id="inward-qty" placeholder="Quantity Inwarded (e.g. 15000 for 15kg)" />
-        <input type="number" id="inward-cost" placeholder="Cost in ₹ (Optional)" />
+        <input type="number" id="inward-qty" placeholder="Quantity (e.g. 15000 for 15kg)" />
+        <input type="number" id="inward-cost" placeholder="Cost in ₹" />
         <input type="text" id="inward-notes" placeholder="Batch / Vendor Note" />
-        <button class="btn btn-accent" onclick="recordGroceryInward()">Restock Warehouse</button>
+        <button class="btn btn-pink" onclick="recordGroceryInward()">Restock Warehouse</button>
       </div>
       <div class="admin-box">
         <h3>Add Ingredient SKU</h3>
-        <input type="text" id="new-inv-name" placeholder="Item Name (e.g. Dragonfruit)" />
+        <input type="text" id="new-inv-name" placeholder="Item Name (e.g. Kokum, Jamun)" />
         <select id="new-inv-unit">
           <option value="g">Grams (g)</option>
           <option value="ml">Milliliters (ml)</option>
@@ -629,39 +698,39 @@
     </div>
   </section>
 
-  <!-- 10. UPI QR CODE SETTINGS (ADMIN ONLY) -->
+  <!-- 12. UPI QR CODE SETTINGS -->
   <section id="admin-settings-view" class="view">
     <div class="admin-box" style="max-width:550px;">
       <h3>Storefront UPI QR Code</h3>
       <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:14px;">
-        Upload a picture of your store's GooglePay/PhonePe/Paytm counter QR code. It will pop up whenever a barista chooses UPI.
+        Upload a picture of your store's counter QR code. It will pop up when UPI is selected.
       </p>
 
-      <div style="text-align:center; padding:14px; background:#f8faf8; border-radius:12px; margin-bottom:14px;">
+      <div style="text-align:center; padding:14px; background:#fff8f3; border-radius:12px; margin-bottom:14px;">
         <img id="current-upi-preview" src="" alt="UPI QR Code" style="max-width:220px; max-height:220px; border-radius:8px; border:1px solid var(--border);" />
       </div>
 
       <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:4px;">Upload New QR Image:</label>
       <input type="file" id="upi-qr-file-input" accept="image/*" />
-      <button class="btn btn-accent" style="margin-top:10px;" onclick="saveUPIQRCode()">Update UPI QR Image</button>
+      <button class="btn btn-pink" style="margin-top:10px;" onclick="saveUPIQRCode()">Update UPI QR Image</button>
     </div>
   </section>
 
-  <!-- 11. USER MANAGEMENT -->
+  <!-- 13. USER MANAGEMENT -->
   <section id="admin-users-view" class="view">
     <div class="admin-box" style="max-width:550px;">
-      <h3>Register New Staff Member</h3>
-      <input type="text" id="new-user-name" placeholder="Staff Full Name" />
+      <h3>Register Staff Member</h3>
+      <input type="text" id="new-user-name" placeholder="Full Name" />
       <select id="new-user-role">
         <option value="barista">Barista</option>
         <option value="admin">Store Admin</option>
       </select>
-      <input type="password" id="new-user-pin" placeholder="4-Digit PIN or Passcode" />
-      <button class="btn btn-accent" onclick="createStaffAccount()">Create Account</button>
+      <input type="password" id="new-user-pin" placeholder="4-Digit PIN" />
+      <button class="btn btn-pink" onclick="createStaffAccount()">Create Account</button>
     </div>
 
     <div class="admin-box">
-      <h3>Active Staff Members</h3>
+      <h3>Active Crew</h3>
       <table>
         <thead><tr><th>Name</th><th>Role</th><th>PIN</th><th>Active</th><th>Action</th></tr></thead>
         <tbody id="staff-table-body"></tbody>
@@ -669,38 +738,16 @@
     </div>
   </section>
 
-  <!-- 12. BULK EXCEL -->
-  <section id="admin-bulk-view" class="view">
-    <div class="admin-layout">
-      <div class="admin-box">
-        <h3>Bulk Menu Excel Upload</h3>
-        <button class="btn btn-sm" onclick="downloadSampleExcel('drinks')">Download Sample Drinks Excel</button>
-        <div style="margin-top:12px;">
-          <input type="file" id="excel-drinks-file" accept=".xlsx, .xls" />
-          <button class="btn btn-accent" onclick="uploadBulkDrinks()">Upload Drinks</button>
-        </div>
-      </div>
-      <div class="admin-box">
-        <h3>Bulk Inventory Excel Upload</h3>
-        <button class="btn btn-sm" onclick="downloadSampleExcel('inventory')">Download Sample Ingredients Excel</button>
-        <div style="margin-top:12px;">
-          <input type="file" id="excel-inv-file" accept=".xlsx, .xls" />
-          <button class="btn btn-accent" onclick="uploadBulkInventory()">Upload Ingredients</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- MODAL: TOPPINGS & ADDONS PICKER -->
+  <!-- MODAL: BOOSTERS PICKER -->
   <div class="modal" id="addon-modal">
     <div class="modal-box">
-      <h3 id="modal-drink-title" style="color:var(--primary); font-size:1.15rem;">Select Toppings & Boosters</h3>
-      <p style="font-size:0.8rem; color:var(--text-muted);">Tap toppings to add into blend.</p>
+      <h3 id="modal-drink-title" style="color:var(--btj-navy); font-size:1.15rem;">Add Boosters</h3>
+      <p style="font-size:0.8rem; color:var(--text-muted);">Tap boosters to blend in.</p>
       
       <div class="toppings-grid" id="modal-toppings-list"></div>
 
       <div style="display:flex; gap:8px; margin-top:14px;">
-        <button class="btn" style="flex:1;" onclick="confirmAddToCart()">Add to Ticket</button>
+        <button class="btn btn-pink" style="flex:1;" onclick="confirmAddToCart()">Add to Ticket</button>
         <button class="btn" style="background:#8f9e95;" onclick="closeModal('addon-modal')">Cancel</button>
       </div>
     </div>
@@ -709,16 +756,17 @@
   <!-- MODAL: EDIT DRINK -->
   <div class="modal" id="edit-drink-modal">
     <div class="modal-box">
-      <h3 style="color:var(--primary); margin-bottom:12px;">Edit Drink Item</h3>
+      <h3 style="color:var(--btj-navy); margin-bottom:12px;">Edit Drink Item</h3>
       <input type="hidden" id="edit-drink-id" />
       <input type="text" id="edit-drink-name" placeholder="Drink Name" />
-      <input type="number" id="edit-drink-price" placeholder="Base Price" />
+      <input type="number" id="edit-drink-price" placeholder="Price (₹)" />
+      <input type="number" id="edit-drink-kcal" placeholder="Calories (kcal)" />
       <input type="text" id="edit-drink-cat" placeholder="Category" />
       <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:4px;">Replace Image (Optional):</label>
       <input type="file" id="edit-drink-file" accept="image/*" />
 
       <div style="display:flex; gap:8px; margin-top:14px;">
-        <button class="btn btn-accent" style="flex:1;" onclick="saveEditedDrink()">Save Changes</button>
+        <button class="btn btn-pink" style="flex:1;" onclick="saveEditedDrink()">Save Changes</button>
         <button class="btn" style="background:#8f9e95;" onclick="closeModal('edit-drink-modal')">Cancel</button>
       </div>
     </div>
@@ -727,8 +775,8 @@
   <!-- MODAL: PAYMENT MODES & CASH CALCULATOR -->
   <div class="modal" id="payment-modal">
     <div class="modal-box">
-      <h3 style="color:var(--primary); font-size:1.2rem;">Settle Order</h3>
-      <div style="font-size:1.6rem; font-weight:900; color:var(--accent); margin:8px 0;" id="pay-modal-total">₹0</div>
+      <h3 style="color:var(--btj-navy); font-size:1.2rem;">Settle Order</h3>
+      <div style="font-size:1.6rem; font-weight:900; color:var(--btj-pink); margin:8px 0;" id="pay-modal-total">₹0</div>
 
       <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin:12px 0;">
         <button class="btn pay-opt-btn" id="pay-opt-UPI" onclick="selectPayMode('UPI')">📱 UPI</button>
@@ -736,7 +784,7 @@
         <button class="btn pay-opt-btn" id="pay-opt-CASH" onclick="selectPayMode('CASH')">💵 Cash</button>
       </div>
 
-      <div id="cash-calc-pane" style="display:none; background:#f5f8f5; padding:12px; border-radius:10px; margin-bottom:12px;">
+      <div id="cash-calc-pane" style="display:none; background:#fff8f3; padding:12px; border-radius:10px; margin-bottom:12px;">
         <label style="font-size:0.8rem; font-weight:800;">Cash Tendered (₹):</label>
         <input type="number" id="cash-received" placeholder="e.g. 500" oninput="calculateChange()" style="font-size:1.1rem; font-weight:800;" />
         <div style="display:flex; justify-content:space-between; margin-top:6px; font-weight:900;">
@@ -746,36 +794,36 @@
       </div>
 
       <div style="display:flex; gap:8px; margin-top:14px;">
-        <button class="btn btn-accent" style="flex:1; padding:14px;" onclick="finalizeOrder()">Confirm & Settle</button>
+        <button class="btn btn-pink" style="flex:1; padding:14px;" onclick="finalizeOrder()">Confirm & Settle</button>
         <button class="btn" style="background:#8f9e95;" onclick="closeModal('payment-modal')">Cancel</button>
       </div>
     </div>
   </div>
 
-  <!-- MODAL: UPI QR CODE DISPLAY POPUP -->
+  <!-- MODAL: UPI QR POPUP -->
   <div class="modal" id="upi-qr-modal">
     <div class="modal-box" style="text-align:center;">
-      <h3 style="color:var(--primary); font-size:1.3rem;">Scan to Pay via UPI</h3>
-      <div style="font-size:1.4rem; font-weight:900; color:var(--accent); margin:6px 0;" id="upi-modal-amount">₹0</div>
+      <h3 style="color:var(--btj-navy); font-size:1.3rem;">Scan to Pay via UPI</h3>
+      <div style="font-size:1.4rem; font-weight:900; color:var(--btj-pink); margin:6px 0;" id="upi-modal-amount">₹0</div>
       
       <div style="margin:16px 0;">
-        <img id="upi-display-qr" src="" alt="UPI QR Code" style="max-width:240px; max-height:240px; border-radius:12px; border:2px solid var(--border); box-shadow:var(--shadow);" />
+        <img id="upi-display-qr" src="" alt="UPI QR Code" style="max-width:240px; max-height:240px; border-radius:12px; border:2px solid var(--border);" />
       </div>
 
       <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px;">
-        Ask guest to scan with GPay, PhonePe, Paytm, or BHIM.
+        Scan with GPay, PhonePe, Paytm, or BHIM.
       </p>
 
-      <button class="btn" style="width:100%; padding:12px;" onclick="closeModal('upi-qr-modal')">Close QR & Continue</button>
+      <button class="btn" style="width:100%; padding:12px;" onclick="closeModal('upi-qr-modal')">Close QR & Complete</button>
     </div>
   </div>
 
-  <!-- MODAL: 3-QUESTION FEEDBACK DIALOG -->
+  <!-- MODAL: FEEDBACK -->
   <div class="modal" id="feedback-modal">
     <div class="modal-box">
-      <h3 style="color:var(--primary); font-size:1.25rem;">Rate Your Juices! 🌟</h3>
+      <h3 style="color:var(--btj-navy); font-size:1.25rem;">Rate Your Blend! 🌟</h3>
       <div id="feedback-drinks-list" style="margin-top:12px;"></div>
-      <button class="btn btn-accent" style="width:100%; padding:14px; margin-top:14px;" onclick="submitAllDrinkFeedback()">Complete & Celebrate 🎉</button>
+      <button class="btn btn-pink" style="width:100%; padding:14px; margin-top:14px;" onclick="submitAllDrinkFeedback()">Complete & Enjoy 🎉</button>
     </div>
   </div>
 
@@ -792,6 +840,7 @@
       inventory: [],
       customersCRM: [],
       feedbackList: [],
+      expensesList: [],
       cart: [],
       upiQRUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=beingjuice@upi&pn=BeingJuice&cu=INR',
       selectedDrink: null,
@@ -815,6 +864,8 @@
       document.getElementById('crm-date-end').value = today;
       document.getElementById('feedback-date-start').value = monthAgo;
       document.getElementById('feedback-date-end').value = today;
+      document.getElementById('acc-date-start').value = monthAgo;
+      document.getElementById('acc-date-end').value = today;
 
       await loadStaff();
       await loadAppSettings();
@@ -822,45 +873,41 @@
 
     async function loadAppSettings() {
       const { data } = await client.from('app_settings').select('*').eq('key', 'upi_qr_url').single();
-      if (data && data.value) {
-        state.upiQRUrl = data.value;
-      }
+      if (data && data.value) state.upiQRUrl = data.value;
       const preview = document.getElementById('current-upi-preview');
       if (preview) preview.src = state.upiQRUrl;
     }
 
     async function saveUPIQRCode() {
       const fileInput = document.getElementById('upi-qr-file-input');
-      const url = await uploadImageFile(fileInput);
+      const url = await uploadImageFile(fileInput, 'menu-images');
       if (!url) return alert('Please choose an image file.');
 
       await client.from('app_settings').upsert({ key: 'upi_qr_url', value: url });
       state.upiQRUrl = url;
       document.getElementById('current-upi-preview').src = url;
-      alert('UPI QR Code updated successfully!');
+      alert('UPI QR Code updated!');
     }
 
-    // --- DRAWER CONTROLS ---
     function openDrawer() { document.getElementById('drawer-overlay').classList.add('active'); }
     function closeDrawer() { document.getElementById('drawer-overlay').classList.remove('active'); }
     function handleDrawerClick(e) { if (e.target.id === 'drawer-overlay') closeDrawer(); }
 
-    // --- FILE UPLOADER ---
-    async function uploadImageFile(fileInput) {
+    async function uploadImageFile(fileInput, bucket = 'menu-images') {
       const file = fileInput.files[0];
       if (!file) return null;
 
       try {
         const fileExt = file.name.split('.').pop();
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
-        const { data, error } = await client.storage.from('menu-images').upload(fileName, file);
+        const { data, error } = await client.storage.from(bucket).upload(fileName, file);
 
         if (!error && data) {
-          const { data: pubData } = client.storage.from('menu-images').getPublicUrl(fileName);
+          const { data: pubData } = client.storage.from(bucket).getPublicUrl(fileName);
           return pubData.publicUrl;
         }
       } catch (err) {
-        console.warn("Storage upload failed, using Data URL:", err);
+        console.warn("Storage upload failed, falling back to data URL:", err);
       }
 
       return new Promise((resolve) => {
@@ -873,11 +920,11 @@
     // --- AUTH ---
     async function loadStaff() {
       const select = document.getElementById('staff-select');
-      select.innerHTML = '<option value="">Loading staff...</option>';
+      select.innerHTML = '<option value="">Loading crew...</option>';
       const { data, error } = await client.from('staff').select('*').eq('active', true);
       if (error) return select.innerHTML = `<option value="">Error: ${error.message}</option>`;
       state.staffList = data || [];
-      select.innerHTML = '<option value="">Select Staff...</option>' +
+      select.innerHTML = '<option value="">Select Staff Member...</option>' +
         state.staffList.map(s => `<option value="${s.id}">${s.name} (${s.role.toUpperCase()})</option>`).join('');
     }
 
@@ -895,11 +942,9 @@
       document.getElementById('login-overlay').style.display = 'none';
       document.getElementById('current-user-label').innerText = `${staff.name} (${staff.role.toUpperCase()})`;
 
-      // Only show Admin tabs if role === 'admin'
       const adminTabs = document.querySelectorAll('.admin-only');
       adminTabs.forEach(t => t.style.display = (staff.role === 'admin') ? 'inline-block' : 'none');
 
-      // Hide or show Customer Name / Phone column headers in Sales History depending on role
       document.querySelectorAll('.crm-secret-col').forEach(col => {
         col.style.display = (staff.role === 'admin') ? 'table-cell' : 'none';
       });
@@ -929,7 +974,7 @@
     }
 
     function switchTab(tab) {
-      if (state.currentUser && state.currentUser.role !== 'admin' && tab !== 'pos' && tab !== 'history') {
+      if (state.currentUser && state.currentUser.role !== 'admin' && tab !== 'pos' && tab !== 'history' && tab !== 'expense-entry') {
         tab = 'pos';
       }
 
@@ -938,6 +983,8 @@
 
       const map = {
         'pos': 'pos-view',
+        'expense-entry': 'expense-entry-view',
+        'accounting': 'accounting-view',
         'history': 'history-view',
         'crm': 'crm-view',
         'feedback': 'feedback-view',
@@ -947,8 +994,7 @@
         'admin-bom': 'admin-bom-view',
         'admin-inventory': 'admin-inventory-view',
         'admin-settings': 'admin-settings-view',
-        'admin-users': 'admin-users-view',
-        'admin-bulk': 'admin-bulk-view'
+        'admin-users': 'admin-users-view'
       };
 
       document.getElementById(map[tab]).classList.add('active');
@@ -959,6 +1005,7 @@
 
       if (tab === 'pos') renderPOSMenu();
       if (tab === 'history') loadSalesHistory();
+      if (tab === 'accounting') loadAccountingData();
       if (tab === 'crm') loadCustomerCRM();
       if (tab === 'feedback') loadAdminFeedbackTable();
       if (tab === 'reports') renderReports();
@@ -969,9 +1016,9 @@
       if (tab === 'admin-users') renderStaffModule();
     }
 
-    // --- POS MODULE ---
+    // --- POS MODULE (BE THE JUICE BRANDING) ---
     function renderCategories() {
-      const categories = ['ALL', ...new Set(state.drinks.map(d => d.category || 'Cold Pressed'))];
+      const categories = ['ALL', ...new Set(state.drinks.map(d => d.category || 'Hydration'))];
       const container = document.getElementById('cat-pill-container');
       container.innerHTML = categories.map(c => `
         <button class="cat-btn ${state.activeCategory === c ? 'active' : ''}" onclick="filterCategory('${c}')">${c}</button>
@@ -989,29 +1036,33 @@
       const filtered = state.drinks.filter(d => state.activeCategory === 'ALL' || d.category === state.activeCategory);
 
       if (!filtered.length) {
-        container.innerHTML = '<p style="color:var(--text-muted);">No drinks available in this category.</p>';
+        container.innerHTML = '<p style="color:var(--text-muted);">No blends in this category.</p>';
         return;
       }
 
       container.innerHTML = filtered.map(d => `
         <div class="drink-card" onclick="openToppingsModal('${d.id}')">
           <div class="drink-img-wrap">
+            <div class="veg-dot"></div>
             <img class="drink-img" src="${d.image_url || 'https://images.unsplash.com/photo-1613478223719-2ab802602423?w=500'}" alt="${d.name}" />
           </div>
           <div class="drink-info">
-            <div class="drink-cat">${d.category || 'Cold Pressed'}</div>
+            <div class="drink-cat">${d.category || 'Fruit Blend'}</div>
             <div class="drink-title">${d.name}</div>
-            <div class="drink-price">₹${d.base_price}</div>
+            <div class="drink-meta">
+              <span class="drink-price">₹${d.base_price}</span>
+              <span class="drink-kcal">${d.calories || 140} kcal</span>
+            </div>
           </div>
         </div>
       `).join('');
     }
 
-    // --- TOPPINGS MODAL ---
+    // --- BOOSTERS MODAL ---
     function openToppingsModal(drinkId) {
       state.selectedDrink = state.drinks.find(d => d.id === drinkId);
       state.selectedToppings = [];
-      document.getElementById('modal-drink-title').innerText = `Add Toppings: ${state.selectedDrink.name}`;
+      document.getElementById('modal-drink-title').innerText = `Add Boosters: ${state.selectedDrink.name}`;
 
       const container = document.getElementById('modal-toppings-list');
       container.innerHTML = state.toppings.map(t => `
@@ -1019,7 +1070,7 @@
           <img class="topping-img" src="${t.image_url || 'https://images.unsplash.com/photo-1514733670139-4d87a1941d55?w=200'}" />
           <div>
             <div style="font-weight:800; font-size:0.85rem;">${t.name}</div>
-            <div style="color:var(--accent); font-weight:800; font-size:0.8rem;">+₹${t.price}</div>
+            <div style="color:var(--btj-pink); font-weight:800; font-size:0.8rem;">+₹${t.price}</div>
           </div>
         </div>
       `).join('');
@@ -1118,7 +1169,6 @@
       document.getElementById(`pay-opt-${mode}`).classList.add('active');
       document.getElementById('cash-calc-pane').style.display = (mode === 'CASH') ? 'block' : 'none';
 
-      // Feature 5: Automatically pop up QR Code when UPI is clicked
       if (mode === 'UPI') {
         const total = state.cart.reduce((s, i) => s + i.price, 0);
         document.getElementById('upi-modal-amount').innerText = `₹${total}`;
@@ -1151,7 +1201,7 @@
         customerId = newC?.id;
       }
 
-      const receiptNo = 'BJ-' + Math.floor(100000 + Math.random() * 900000);
+      const receiptNo = 'BTJ-' + Math.floor(100000 + Math.random() * 900000);
       const cashTendered = parseFloat(document.getElementById('cash-received').value) || total;
       const changeDue = Math.max(0, cashTendered - total);
 
@@ -1193,19 +1243,105 @@
       openFeedbackModal();
     }
 
+    // --- EXPENSES & ACCOUNTING MODULE ---
+    async function submitStaffExpense() {
+      const category = document.getElementById('exp-category').value;
+      const amount = parseFloat(document.getElementById('exp-amount').value);
+      const payment_mode = document.getElementById('exp-paymode').value;
+      const notes = document.getElementById('exp-notes').value.trim();
+      const fileInput = document.getElementById('exp-receipt-file');
+
+      if (isNaN(amount) || amount <= 0) return alert('Please enter a valid expense amount.');
+
+      const receiptUrl = await uploadImageFile(fileInput, 'receipts');
+
+      const { error } = await client.from('expenses').insert({
+        category,
+        amount,
+        payment_mode,
+        notes,
+        receipt_url: receiptUrl,
+        submitted_by: state.currentUser?.name || 'Staff'
+      });
+
+      if (error) return alert(`Failed: ${error.message}`);
+
+      alert('Expense recorded successfully to store ledger!');
+      document.getElementById('exp-amount').value = '';
+      document.getElementById('exp-notes').value = '';
+      document.getElementById('exp-receipt-file').value = '';
+      switchTab('pos');
+    }
+
+    async function loadAccountingData() {
+      const tbody = document.getElementById('accounting-table-body');
+      tbody.innerHTML = '<tr><td colspan="7">Loading ledger...</td></tr>';
+
+      const startDate = document.getElementById('acc-date-start').value;
+      const endDate = document.getElementById('acc-date-end').value;
+
+      // 1. Fetch Expenses
+      const { data: expenses } = await client.from('expenses').select('*').order('created_at', { ascending: false });
+      
+      // 2. Fetch Orders for Inflow
+      const { data: orders } = await client.from('orders').select('total_amount, created_at');
+
+      const filteredExp = (expenses || []).filter(e => {
+        const d = e.created_at.split('T')[0];
+        return (!startDate || d >= startDate) && (!endDate || d <= endDate);
+      });
+
+      const filteredOrders = (orders || []).filter(o => {
+        const d = o.created_at.split('T')[0];
+        return (!startDate || d >= startDate) && (!endDate || d <= endDate);
+      });
+
+      const totalInflow = filteredOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+      const totalOutflow = filteredExp.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+      const netMargin = totalInflow - totalOutflow;
+
+      document.getElementById('acc-inflow').innerText = `₹${totalInflow.toLocaleString()}`;
+      document.getElementById('acc-outflow').innerText = `₹${totalOutflow.toLocaleString()}`;
+      document.getElementById('acc-net').innerText = `₹${netMargin.toLocaleString()}`;
+      document.getElementById('acc-net').style.color = (netMargin >= 0) ? 'var(--btj-veg)' : 'var(--danger)';
+
+      if (!filteredExp.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No expenses recorded for this date range.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filteredExp.map(e => `
+        <tr>
+          <td>${new Date(e.created_at).toLocaleDateString()}</td>
+          <td><strong>${e.category}</strong></td>
+          <td style="font-weight:800; color:var(--danger);">-₹${e.amount}</td>
+          <td><span class="drink-cat">${e.payment_mode}</span></td>
+          <td>${e.submitted_by}</td>
+          <td>${e.notes || '-'}</td>
+          <td>
+            ${e.receipt_url ? `
+              <a href="${e.receipt_url}" target="_blank" download class="btn btn-sm" style="text-decoration:none; display:inline-block;">
+                📥 View / Download Bill
+              </a>
+            ` : '<span style="color:var(--text-muted);">No Receipt Attached</span>'}
+          </td>
+        </tr>
+      `).join('');
+    }
+
     // --- 3-QUESTION FEEDBACK MODAL ---
     function openFeedbackModal() {
       const container = document.getElementById('feedback-drinks-list');
       container.innerHTML = state.currentPlacedOrderItems.map(item => `
-        <div style="background:#f8faf8; padding:16px; border-radius:12px; border:1px solid var(--border); margin-bottom:14px;" id="fb-item-${item.id}">
-          <h4 style="color:var(--primary); font-size:1.05rem; font-weight:800;">${item.drink_name}</h4>
+        <div style="background:#fffaf6; padding:16px; border-radius:12px; border:1px solid var(--border); margin-bottom:14px;" id="fb-item-${item.id}">
+          <h4 style="color:var(--btj-navy); font-size:1.05rem; font-weight:800;">${item.drink_name}</h4>
           
           <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-top:8px;">
             1. How was this drink?
           </label>
           <div class="star-bar" id="stars-${item.id}">
             ${[1, 2, 3, 4, 5].map(star => `
-              <button class="star-btn ${star <= 5 ? 'active' : ''}" onclick="setRating('${item.id}',${star})">★</button>
+              <button class="star-btn ${star <= 5 ? 'active' : ''}" onclick="setRating('${item.id}', ${star})">★</button>
             `).join('')}
           </div>
           <input type="hidden" id="rating-val-${item.id}" value="5" />
@@ -1223,7 +1359,7 @@
           <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block;">
             3. Any fruit, blend, or flavor to add?
           </label>
-          <input type="text" id="suggestion-val-${item.id}" placeholder="e.g. Add Passionfruit, Dragonfruit, more Ginger..." style="margin-top:6px; font-size:0.85rem;" />
+          <input type="text" id="suggestion-val-${item.id}" placeholder="e.g. Kokum, Jamun, more Ginger..." style="margin-top:6px; font-size:0.85rem;" />
         </div>
       `).join('');
 
@@ -1259,7 +1395,7 @@
       confetti({ particleCount: 90, spread: 60, origin: { y: 0.5 } });
     }
 
-    // --- SALES HISTORY (Feature 4: Non-sensitive for Barista, full details for Admin) ---
+    // --- SALES HISTORY ---
     async function loadSalesHistory() {
       const date = document.getElementById('history-date-picker').value;
       const start = `${date}T00:00:00.000Z`;
@@ -1285,7 +1421,7 @@
           ${isAdmin ? `<td>${o.customers?.name || 'Guest'}</td>` : ''}
           ${isAdmin ? `<td>${o.customers?.phone || '-'}</td>` : ''}
           <td>${o.barista_name || '-'}</td>
-          <td style="font-weight:800; color:var(--primary); font-size:0.95rem;">₹${o.total_amount}</td>
+          <td style="font-weight:800; color:var(--btj-pink); font-size:0.95rem;">₹${o.total_amount}</td>
           <td><span class="drink-cat">${o.payment_method}</span></td>
           <td><small>${(o.order_items || []).map(i => i.drink_name).join(', ')}</small></td>
           <td>${new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
@@ -1293,7 +1429,7 @@
       `).join('');
     }
 
-    // --- CUSTOMER CRM WITH DATE FILTER & A-TO-Z SORTING (Features 1 & 2) ---
+    // --- CUSTOMER CRM WITH DATE FILTER & SORTING ---
     async function loadCustomerCRM() {
       const tbody = document.getElementById('crm-table-body');
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Calculating guest history...</td></tr>';
@@ -1309,7 +1445,6 @@
       let repeatCount = 0;
 
       state.customersCRM = customers.map(c => {
-        // Filter customer orders by selected date range
         const orders = (c.orders || []).filter(o => {
           const d = o.created_at.split('T')[0];
           return (!startDate || d >= startDate) && (!endDate || d <= endDate);
@@ -1355,7 +1490,7 @@
           avgRatingNum,
           avgRating
         };
-      }).filter(c => c.visitCount > 0); // show only guests with visits in range
+      }).filter(c => c.visitCount > 0);
 
       document.getElementById('crm-kpi-total').innerText = state.customersCRM.length;
       document.getElementById('crm-kpi-repeats').innerText = repeatCount;
@@ -1368,7 +1503,7 @@
     function renderCustomerCRMTable(list) {
       const tbody = document.getElementById('crm-table-body');
       if (!list.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No matching customers found for this period.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No matching customers found.</td></tr>';
         return;
       }
 
@@ -1377,10 +1512,10 @@
           <td><strong>${c.name}</strong></td>
           <td>${c.phone}</td>
           <td><strong>${c.visitCount}</strong> visit${c.visitCount !== 1 ? 's' : ''}</td>
-          <td style="font-weight:800; color:var(--primary);">₹${c.totalSpent.toLocaleString()}</td>
+          <td style="font-weight:800; color:var(--btj-pink);">₹${c.totalSpent.toLocaleString()}</td>
           <td>${c.favoriteDrink}</td>
           <td>${c.lastVisitDate}</td>
-          <td style="color:#d97706; font-weight:800;">${c.avgRating}</td>
+          <td style="color:var(--btj-amber); font-weight:800;">${c.avgRating}</td>
         </tr>
       `).join('');
     }
@@ -1395,15 +1530,13 @@
       state.sortDir[field] = !state.sortDir[field];
       state.customersCRM.sort((a, b) => {
         let vA = a[field], vB = b[field];
-        if (typeof vA === 'string') {
-          return state.sortDir[field] ? vA.localeCompare(vB) : vB.localeCompare(vA);
-        }
+        if (typeof vA === 'string') return state.sortDir[field] ? vA.localeCompare(vB) : vB.localeCompare(vA);
         return state.sortDir[field] ? vA - vB : vB - vA;
       });
       renderCustomerCRMTable(state.customersCRM);
     }
 
-    // --- GUEST FEEDBACK WITH DATE FILTER & A-TO-Z SORTING (Features 1 & 2) ---
+    // --- GUEST FEEDBACK WITH DATE FILTER & SORTING ---
     async function loadAdminFeedbackTable() {
       const tbody = document.getElementById('admin-feedback-table-body');
       tbody.innerHTML = '<tr><td colspan="7">Loading customer feedback...</td></tr>';
@@ -1435,7 +1568,7 @@
     function renderFeedbackTable(list) {
       const tbody = document.getElementById('admin-feedback-table-body');
       if (!list.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No feedback records found for this date range.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No feedback records found.</td></tr>';
         return;
       }
 
@@ -1444,7 +1577,7 @@
           <td><strong>${i.customerName}</strong></td>
           <td>${i.phone}</td>
           <td><strong>${i.drinkName}</strong></td>
-          <td style="color:#d97706; font-size:1.1rem; font-weight:800;">${'★'.repeat(i.rating)}${'☆'.repeat(5 - i.rating)}</td>
+          <td style="color:var(--btj-amber); font-size:1.1rem; font-weight:800;">${'★'.repeat(i.rating)}${'☆'.repeat(5 - i.rating)}</td>
           <td><span class="drink-cat">${i.vfm}</span></td>
           <td>${i.suggestion}</td>
           <td>${i.date}</td>
@@ -1456,15 +1589,13 @@
       state.sortDir[field] = !state.sortDir[field];
       state.feedbackList.sort((a, b) => {
         let vA = a[field], vB = b[field];
-        if (typeof vA === 'string') {
-          return state.sortDir[field] ? vA.localeCompare(vB) : vB.localeCompare(vA);
-        }
+        if (typeof vA === 'string') return state.sortDir[field] ? vA.localeCompare(vB) : vB.localeCompare(vA);
         return state.sortDir[field] ? vA - vB : vB - vA;
       });
       renderFeedbackTable(state.feedbackList);
     }
 
-    // --- MENU ADMIN (Feature 3: Complete Hard Delete) ---
+    // --- MENU ADMIN (HARD DELETE & EDIT) ---
     function renderAdminMenu() {
       const tbody = document.getElementById('admin-menu-body');
       tbody.innerHTML = state.drinks.map(d => `
@@ -1472,6 +1603,7 @@
           <td><img src="${d.image_url || 'https://images.unsplash.com/photo-1613478223719-2ab802602423?w=500'}" style="width:40px; height:40px; object-fit:cover; border-radius:6px;" /></td>
           <td><strong>${d.name}</strong></td>
           <td>₹${d.base_price}</td>
+          <td>${d.calories || 140} kcal</td>
           <td>${d.category}</td>
           <td>
             <button class="btn btn-sm" onclick="openEditDrinkModal('${d.id}')">Edit</button>
@@ -1484,7 +1616,8 @@
     async function addNewDrink() {
       const name = document.getElementById('new-drink-name').value.trim();
       const price = parseFloat(document.getElementById('new-drink-price').value);
-      const category = document.getElementById('new-drink-cat').value.trim() || 'Cold Pressed';
+      const calories = parseInt(document.getElementById('new-drink-kcal').value) || 140;
+      const category = document.getElementById('new-drink-cat').value.trim() || 'Hydration';
       const fileInput = document.getElementById('new-drink-file');
 
       if (!name || isNaN(price)) return alert('Name and Price required.');
@@ -1493,6 +1626,7 @@
       await client.from('drinks').insert({
         name,
         base_price: price,
+        calories,
         category,
         image_url: uploadedUrl || 'https://images.unsplash.com/photo-1613478223719-2ab802602423?w=500',
         is_active: true
@@ -1510,6 +1644,7 @@
       document.getElementById('edit-drink-id').value = drink.id;
       document.getElementById('edit-drink-name').value = drink.name;
       document.getElementById('edit-drink-price').value = drink.base_price;
+      document.getElementById('edit-drink-kcal').value = drink.calories || 140;
       document.getElementById('edit-drink-cat').value = drink.category;
       document.getElementById('edit-drink-modal').style.display = 'flex';
     }
@@ -1518,10 +1653,11 @@
       const id = document.getElementById('edit-drink-id').value;
       const name = document.getElementById('edit-drink-name').value.trim();
       const price = parseFloat(document.getElementById('edit-drink-price').value);
+      const calories = parseInt(document.getElementById('edit-drink-kcal').value) || 140;
       const category = document.getElementById('edit-drink-cat').value.trim();
       const fileInput = document.getElementById('edit-drink-file');
 
-      let updatePayload = { name, base_price: price, category };
+      let updatePayload = { name, base_price: price, calories, category };
       const newImg = await uploadImageFile(fileInput);
       if (newImg) updatePayload.image_url = newImg;
 
@@ -1532,17 +1668,17 @@
     }
 
     async function deleteDrinkPermanently(id, name) {
-      if (!confirm(`Are you sure you want to permanently delete "${name}" from the database? This cannot be undone.`)) return;
+      if (!confirm(`Permanently delete "${name}" from the database?`)) return;
       const { error } = await client.from('drinks').delete().eq('id', id);
-      if (error) return alert(`Failed to delete: ${error.message}`);
-      alert(`"${name}" was permanently removed.`);
+      if (error) return alert(`Failed: ${error.message}`);
+      alert(`"${name}" deleted.`);
       await refreshAllData();
       renderAdminMenu();
     }
 
-    // --- TOPPINGS ADMIN ---
+    // --- BOOSTERS ADMIN ---
     function renderToppingsAdmin() {
-      document.getElementById('new-top-inv-select').innerHTML = '<option value="">Select Linked Inventory SKU</option>' +
+      document.getElementById('new-top-inv-select').innerHTML = '<option value="">Select Linked SKU</option>' +
         state.inventory.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
 
       const tbody = document.getElementById('admin-toppings-body');
@@ -1586,7 +1722,7 @@
     }
 
     async function removeTopping(id) {
-      if (!confirm('Permanently remove this topping?')) return;
+      if (!confirm('Permanently delete booster?')) return;
       await client.from('toppings').delete().eq('id', id);
       await refreshAllData();
       renderToppingsAdmin();
@@ -1651,7 +1787,7 @@
         await client.from('recipe_items').insert(newBOM);
       }
 
-      alert('Multi-Ingredient Recipe BOM Updated!');
+      alert('Recipe formulation saved!');
       await refreshAllData();
     }
 
@@ -1666,7 +1802,7 @@
           <td><strong>${i.name}</strong></td>
           <td>${i.stock_qty}</td>
           <td>${i.unit}</td>
-          <td>${i.stock_qty < 1000 ? '<span style="color:var(--danger); font-weight:800;">LOW</span>' : '<span style="color:var(--success); font-weight:800;">OK</span>'}</td>
+          <td>${i.stock_qty < 1000 ? '<span style="color:var(--danger); font-weight:800;">LOW</span>' : '<span style="color:var(--btj-veg); font-weight:800;">OK</span>'}</td>
         </tr>
       `).join('');
     }
@@ -1695,7 +1831,7 @@
       renderInventoryModule();
     }
 
-    // --- USER MANAGEMENT ---
+    // --- CREW / STAFF ADMIN ---
     function renderStaffModule() {
       const tbody = document.getElementById('staff-table-body');
       tbody.innerHTML = state.staffList.map(s => `
@@ -1768,7 +1904,7 @@
         type: 'bar',
         data: {
           labels: Object.keys(drinkMap),
-          datasets: [{ data: Object.values(drinkMap), backgroundColor: '#105634' }]
+          datasets: [{ data: Object.values(drinkMap), backgroundColor: '#EE3F7F' }]
         },
         options: { plugins: { legend: { display: false } } }
       });
@@ -1778,56 +1914,9 @@
         type: 'doughnut',
         data: {
           labels: ['1★', '2★', '3★', '4★', '5★'],
-          datasets: [{ data: Object.values(ratingDist), backgroundColor: ['#ef4444', '#f97316', '#eab308', '#84cc16', '#10b981'] }]
+          datasets: [{ data: Object.values(ratingDist), backgroundColor: ['#ef4444', '#f97316', '#FCB449', '#A6CE43', '#0A8A3A'] }]
         }
       });
-    }
-
-    // --- BULK EXCEL ---
-    function downloadSampleExcel(type) {
-      let data = [];
-      let filename = '';
-      if (type === 'drinks') {
-        data = [{ name: "Watermelon Glow", base_price: 180, category: "Hydration", image_url: "https://images.unsplash.com/photo-1589733955941-5eeaf752f6dd?w=500" }];
-        filename = 'BeingJuice_Drinks_Sample.xlsx';
-      } else {
-        data = [{ name: "Fresh Watermelon", stock_qty: 25000, unit: "g" }];
-        filename = 'BeingJuice_Ingredients_Sample.xlsx';
-      }
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Sample");
-      XLSX.writeFile(wb, filename);
-    }
-
-    async function uploadBulkDrinks() {
-      const file = document.getElementById('excel-drinks-file').files[0];
-      if (!file) return alert('Select file.');
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, { type: 'array' });
-        const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-        await client.from('drinks').insert(json);
-        alert(`Imported ${json.length} drinks!`);
-        await refreshAllData();
-      };
-      reader.readAsArrayBuffer(file);
-    }
-
-    async function uploadBulkInventory() {
-      const file = document.getElementById('excel-inv-file').files[0];
-      if (!file) return alert('Select file.');
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, { type: 'array' });
-        const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-        await client.from('inventory').insert(json);
-        alert(`Imported ${json.length} ingredients!`);
-        await refreshAllData();
-      };
-      reader.readAsArrayBuffer(file);
     }
 
     window.onload = init;
