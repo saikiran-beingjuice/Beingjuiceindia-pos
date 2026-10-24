@@ -105,7 +105,7 @@
     }
     .cat-btn.active { background: var(--btj-navy); color: white; border-color: var(--btj-navy); }
 
-    /* Clean Minimalist Drink Cards */
+    /* Menu Cards */
     .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
     .drink-card {
       background: white;
@@ -141,7 +141,6 @@
     .drink-cat { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; color: var(--btj-orange); }
     .drink-title { font-size: 0.95rem; font-weight: 800; color: var(--btj-navy); line-height: 1.25; }
     
-    /* Brand Truth: Calories equal visual weight to price */
     .drink-meta { display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px; }
     .drink-price { font-size: 1.15rem; font-weight: 900; color: var(--btj-pink); }
     .drink-kcal { font-size: 0.8rem; font-weight: 800; color: var(--btj-navy); background: #fdf5ee; padding: 2px 6px; border-radius: 6px; }
@@ -176,7 +175,7 @@
       border-radius: 20px;
     }
 
-    /* Minimal Flyout Drawer */
+    /* Flyout Drawer */
     .drawer-overlay {
       position: fixed;
       inset: 0;
@@ -190,7 +189,7 @@
 
     .drawer-content {
       background: white;
-      width: 420px;
+      width: 440px;
       max-width: 90vw;
       height: 100%;
       box-shadow: -10px 0 30px rgba(0,0,0,0.1);
@@ -205,6 +204,38 @@
     .drawer-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--btj-cream); padding-bottom: 12px; }
     .cart-items { flex: 1; overflow-y: auto; padding: 14px 0; }
     .cart-item { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 12px; border-bottom: 1px dashed var(--border); padding-bottom: 8px; }
+
+    /* Discount Selector Bar */
+    .discount-container {
+      background: #fffaf6;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin: 10px 0;
+    }
+    .discount-pills {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .disc-btn {
+      padding: 6px 4px;
+      border-radius: 8px;
+      border: 1.5px solid var(--border);
+      background: white;
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-weight: 800;
+      color: var(--btj-navy);
+      transition: all 0.15s ease;
+      text-align: center;
+    }
+    .disc-btn.active {
+      border-color: var(--btj-pink);
+      background: #fdf0f5;
+      color: var(--btj-pink);
+    }
 
     /* Inputs, Buttons & Tables */
     input, select {
@@ -273,10 +304,6 @@
     .vfm-btn { padding: 8px; border-radius: 8px; border: 1.5px solid var(--border); background: white; cursor: pointer; font-weight: 700; font-size: 0.82rem; }
     .vfm-btn.active { border-color: var(--btj-pink); background: #fff0f5; color: var(--btj-pink); }
 
-    /* Accounting Outflow Badge */
-    .badge-outflow { background: #ffe4e6; color: var(--danger); font-weight: 800; padding: 4px 8px; border-radius: 6px; }
-    .badge-inflow { background: #e6f7ec; color: var(--btj-veg); font-weight: 800; padding: 4px 8px; border-radius: 6px; }
-
     /* Login Screen */
     #login-overlay { position: fixed; inset: 0; background: linear-gradient(135deg, var(--btj-navy), var(--btj-pink)); z-index: 999; display: flex; align-items: center; justify-content: center; }
     .login-card { background: white; padding: 36px; border-radius: 20px; width: 360px; box-shadow: 0 15px 35px rgba(0,0,0,0.2); text-align: center; }
@@ -330,7 +357,7 @@
     </div>
   </header>
 
-  <!-- 1. BARISTA POS (MINIMAL CLEAN GRID) -->
+  <!-- 1. BARISTA POS -->
   <section id="pos-view" class="view active">
     <div class="category-scroll" id="cat-pill-container">
       <button class="cat-btn active" onclick="filterCategory('ALL')">All Blends</button>
@@ -360,13 +387,39 @@
         </div>
 
         <div class="cart-items" id="cart-list">Cart is empty</div>
+
+        <!-- DISCOUNT SELECTION BAR -->
+        <div class="discount-container">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label style="font-size:0.78rem; font-weight:800; color:var(--btj-navy);">Apply Store Discount:</label>
+            <span id="discount-label-text" style="font-size:0.75rem; font-weight:800; color:var(--btj-pink);">0%</span>
+          </div>
+          <div class="discount-pills">
+            <button type="button" class="disc-btn active" id="disc-btn-0" onclick="applyDiscount(0)">None</button>
+            <button type="button" class="disc-btn" id="disc-btn-10" onclick="applyDiscount(10)">10% OFF</button>
+            <button type="button" class="disc-btn" id="disc-btn-15" onclick="applyDiscount(15)">15% OFF</button>
+            <button type="button" class="disc-btn" id="disc-btn-20" onclick="applyDiscount(20)">20% OFF</button>
+          </div>
+        </div>
       </div>
 
       <div>
-        <div style="display:flex; justify-content:space-between; font-weight:900; font-size:1.35rem; color:var(--btj-navy); margin:12px 0;">
-          <span>Total:</span>
-          <span id="cart-total-amt">₹0</span>
+        <!-- Calculations Breakdown -->
+        <div style="border-top:1px solid var(--border); padding-top:10px; margin-bottom:8px; font-size:0.85rem;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span style="color:var(--text-muted);">Subtotal:</span>
+            <span id="cart-subtotal-amt" style="font-weight:700;">₹0</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px; color:var(--btj-pink);" id="cart-discount-row">
+            <span>Discount Savings:</span>
+            <span id="cart-discount-amt" style="font-weight:800;">-₹0</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-weight:900; font-size:1.35rem; color:var(--btj-navy); margin-top:6px;">
+            <span>Net Payable:</span>
+            <span id="cart-total-amt">₹0</span>
+          </div>
         </div>
+
         <button class="btn btn-pink" style="width:100%; padding:15px; font-size:1.05rem;" onclick="openPaymentModal()">
           Settle Order ✨
         </button>
@@ -374,12 +427,12 @@
     </div>
   </div>
 
-  <!-- 2. STAFF EXPENSE ENTRY (NEW) -->
+  <!-- 2. STAFF EXPENSE ENTRY -->
   <section id="expense-entry-view" class="view">
     <div class="admin-box" style="max-width:520px; margin: 0 auto;">
       <h3>Record Storefront Expense</h3>
       <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:14px;">
-        Staff can record day-to-day out-of-pocket store costs (produce, ice, repairs, packaging) with receipt photo uploads.
+        Staff can record out-of-pocket store costs (produce, ice, repairs, packaging) with receipt photo uploads.
       </p>
 
       <label style="font-size:0.8rem; font-weight:800;">Expense Category:</label>
@@ -412,7 +465,7 @@
     </div>
   </section>
 
-  <!-- 3. ADMIN ACCOUNTING & EXPENSES LEDGER (NEW) -->
+  <!-- 3. ADMIN ACCOUNTING & EXPENSES LEDGER -->
   <section id="accounting-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -427,7 +480,6 @@
         </div>
       </div>
 
-      <!-- Financial Reconciliation Cards -->
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin:16px 0;">
         <div style="background:#eef7f0; padding:14px; border-radius:12px; text-align:center;">
           <div style="font-size:0.75rem; font-weight:800; color:var(--btj-veg);">TOTAL SALES (INFLOW)</div>
@@ -476,7 +528,9 @@
             <th class="crm-secret-col">Customer Name</th>
             <th class="crm-secret-col">Phone</th>
             <th>Barista</th>
-            <th>Amount Generated</th>
+            <th>Subtotal</th>
+            <th>Discount</th>
+            <th>Net Paid</th>
             <th>Payment Mode</th>
             <th>Drinks & Addons</th>
             <th>Time</th>
@@ -589,7 +643,7 @@
     </div>
   </section>
 
-  <!-- 8. MENU ADMIN (COMPLETE HARD DELETE & EDIT) -->
+  <!-- 8. MENU ADMIN (HARD DELETE & EDIT) -->
   <section id="admin-menu-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
@@ -842,6 +896,7 @@
       feedbackList: [],
       expensesList: [],
       cart: [],
+      discountPercent: 0,
       upiQRUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=beingjuice@upi&pn=BeingJuice&cu=INR',
       selectedDrink: null,
       selectedToppings: [],
@@ -1016,7 +1071,7 @@
       if (tab === 'admin-users') renderStaffModule();
     }
 
-    // --- POS MODULE (BE THE JUICE BRANDING) ---
+    // --- POS MODULE ---
     function renderCategories() {
       const categories = ['ALL', ...new Set(state.drinks.map(d => d.category || 'Hydration'))];
       const container = document.getElementById('cat-pill-container');
@@ -1106,10 +1161,23 @@
       openDrawer();
     }
 
+    // --- DISCOUNT LOGIC ---
+    function applyDiscount(percent) {
+      state.discountPercent = percent;
+      [0, 10, 15, 20].forEach(p => {
+        const btn = document.getElementById(`disc-btn-${p}`);
+        if (btn) btn.classList.toggle('active', p === percent);
+      });
+      document.getElementById('discount-label-text').innerText = percent > 0 ? `${percent}% Applied` : '0%';
+      renderCart();
+    }
+
     function renderCart() {
       const container = document.getElementById('cart-list');
       const badge = document.getElementById('fab-badge');
       const fabTotal = document.getElementById('fab-total');
+      const cartSubtotalAmt = document.getElementById('cart-subtotal-amt');
+      const cartDiscountAmt = document.getElementById('cart-discount-amt');
       const cartTotalAmt = document.getElementById('cart-total-amt');
 
       badge.innerText = state.cart.length;
@@ -1117,13 +1185,15 @@
       if (!state.cart.length) {
         container.innerHTML = '<p style="color:var(--text-muted); text-align:center; margin-top:20px;">Cart is empty</p>';
         fabTotal.innerText = '₹0';
+        cartSubtotalAmt.innerText = '₹0';
+        cartDiscountAmt.innerText = '-₹0';
         cartTotalAmt.innerText = '₹0';
         return;
       }
 
-      let total = 0;
+      let subtotal = 0;
       container.innerHTML = state.cart.map((item, idx) => {
-        total += item.price;
+        subtotal += item.price;
         return `
           <div class="cart-item">
             <div>
@@ -1138,8 +1208,13 @@
         `;
       }).join('');
 
-      fabTotal.innerText = `₹${total}`;
-      cartTotalAmt.innerText = `₹${total}`;
+      const discountAmt = Math.round((subtotal * state.discountPercent) / 100);
+      const netTotal = Math.max(0, subtotal - discountAmt);
+
+      cartSubtotalAmt.innerText = `₹${subtotal}`;
+      cartDiscountAmt.innerText = `-₹${discountAmt} (${state.discountPercent}%)`;
+      cartTotalAmt.innerText = `₹${netTotal}`;
+      fabTotal.innerText = `₹${netTotal}`;
     }
 
     function removeFromCart(idx) {
@@ -1155,7 +1230,10 @@
       const phone = document.getElementById('cust-phone').value.trim();
       if (!phone) return alert('Customer phone number is required.');
 
-      const total = state.cart.reduce((s, i) => s + i.price, 0);
+      const subtotal = state.cart.reduce((s, i) => s + i.price, 0);
+      const discountAmt = Math.round((subtotal * state.discountPercent) / 100);
+      const total = Math.max(0, subtotal - discountAmt);
+
       document.getElementById('pay-modal-total').innerText = `₹${total}`;
       selectPayMode('UPI');
       document.getElementById('cash-received').value = '';
@@ -1170,7 +1248,10 @@
       document.getElementById('cash-calc-pane').style.display = (mode === 'CASH') ? 'block' : 'none';
 
       if (mode === 'UPI') {
-        const total = state.cart.reduce((s, i) => s + i.price, 0);
+        const subtotal = state.cart.reduce((s, i) => s + i.price, 0);
+        const discountAmt = Math.round((subtotal * state.discountPercent) / 100);
+        const total = Math.max(0, subtotal - discountAmt);
+
         document.getElementById('upi-modal-amount').innerText = `₹${total}`;
         document.getElementById('upi-display-qr').src = state.upiQRUrl;
         document.getElementById('upi-qr-modal').style.display = 'flex';
@@ -1178,7 +1259,10 @@
     }
 
     function calculateChange() {
-      const total = state.cart.reduce((s, i) => s + i.price, 0);
+      const subtotal = state.cart.reduce((s, i) => s + i.price, 0);
+      const discountAmt = Math.round((subtotal * state.discountPercent) / 100);
+      const total = Math.max(0, subtotal - discountAmt);
+
       const tendered = parseFloat(document.getElementById('cash-received').value) || 0;
       const change = Math.max(0, tendered - total);
       document.getElementById('cash-change-due').innerText = `₹${change}`;
@@ -1187,7 +1271,10 @@
     async function finalizeOrder() {
       const phone = document.getElementById('cust-phone').value.trim();
       const name = document.getElementById('cust-name').value.trim();
-      const total = state.cart.reduce((s, i) => s + i.price, 0);
+
+      const subtotal = state.cart.reduce((s, i) => s + i.price, 0);
+      const discountAmt = Math.round((subtotal * state.discountPercent) / 100);
+      const total = Math.max(0, subtotal - discountAmt);
 
       let customerId = null;
       const { data: cust } = await client.from('customers').select('id, name').eq('phone', phone).single();
@@ -1207,6 +1294,9 @@
 
       const { data: order, error: oErr } = await client.from('orders').insert({
         customer_id: customerId,
+        subtotal_amount: subtotal,
+        discount_percent: state.discountPercent,
+        discount_amount: discountAmt,
         total_amount: total,
         payment_method: state.selectedPaymentMode,
         barista_id: state.currentUser.id,
@@ -1235,6 +1325,8 @@
       state.currentPlacedOrderId = order.id;
       state.currentPlacedOrderItems = insertedItems || [];
       state.cart = [];
+      state.discountPercent = 0;
+      applyDiscount(0);
       document.getElementById('cust-name').value = '';
       document.getElementById('cust-phone').value = '';
       renderCart();
@@ -1280,10 +1372,7 @@
       const startDate = document.getElementById('acc-date-start').value;
       const endDate = document.getElementById('acc-date-end').value;
 
-      // 1. Fetch Expenses
       const { data: expenses } = await client.from('expenses').select('*').order('created_at', { ascending: false });
-      
-      // 2. Fetch Orders for Inflow
       const { data: orders } = await client.from('orders').select('total_amount, created_at');
 
       const filteredExp = (expenses || []).filter(e => {
@@ -1411,25 +1500,32 @@
       const isAdmin = state.currentUser?.role === 'admin';
 
       if (!orders || !orders.length) {
-        tbody.innerHTML = `<tr><td colspan="${isAdmin ? 8 : 6}" style="text-align:center; color:var(--text-muted);">No sales recorded on this date.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${isAdmin ? 10 : 8}" style="text-align:center; color:var(--text-muted);">No sales recorded on this date.</td></tr>`;
         return;
       }
 
-      tbody.innerHTML = orders.map(o => `
-        <tr>
-          <td><strong>${o.receipt_no || o.id.substring(0,8)}</strong></td>
-          ${isAdmin ? `<td>${o.customers?.name || 'Guest'}</td>` : ''}
-          ${isAdmin ? `<td>${o.customers?.phone || '-'}</td>` : ''}
-          <td>${o.barista_name || '-'}</td>
-          <td style="font-weight:800; color:var(--btj-pink); font-size:0.95rem;">₹${o.total_amount}</td>
-          <td><span class="drink-cat">${o.payment_method}</span></td>
-          <td><small>${(o.order_items || []).map(i => i.drink_name).join(', ')}</small></td>
-          <td>${new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-        </tr>
-      `).join('');
+      tbody.innerHTML = orders.map(o => {
+        const subtotal = o.subtotal_amount || o.total_amount;
+        const discPercent = o.discount_percent || 0;
+        const discAmt = o.discount_amount || 0;
+        return `
+          <tr>
+            <td><strong>${o.receipt_no || o.id.substring(0,8)}</strong></td>
+            ${isAdmin ? `<td>${o.customers?.name || 'Guest'}</td>` : ''}
+            ${isAdmin ? `<td>${o.customers?.phone || '-'}</td>` : ''}
+            <td>${o.barista_name || '-'}</td>
+            <td>₹${subtotal}</td>
+            <td style="color:var(--btj-pink); font-weight:700;">${discPercent > 0 ? `${discPercent}% (-₹${discAmt})` : '0%'}</td>
+            <td style="font-weight:900; color:var(--btj-navy); font-size:0.95rem;">₹${o.total_amount}</td>
+            <td><span class="drink-cat">${o.payment_method}</span></td>
+            <td><small>${(o.order_items || []).map(i => i.drink_name).join(', ')}</small></td>
+            <td>${new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+          </tr>
+        `;
+      }).join('');
     }
 
-    // --- CUSTOMER CRM WITH DATE FILTER & SORTING ---
+    // --- CUSTOMER CRM ---
     async function loadCustomerCRM() {
       const tbody = document.getElementById('crm-table-body');
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Calculating guest history...</td></tr>';
@@ -1437,13 +1533,10 @@
       const startDate = document.getElementById('crm-date-start').value;
       const endDate = document.getElementById('crm-date-end').value;
 
-      const { data: customers, error } = await client.from('customers')
-        .select('*, orders(*, order_items(*))');
-
+      const { data: customers, error } = await client.from('customers').select('*, orders(*, order_items(*))');
       if (error) return tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger);">${error.message}</td></tr>`;
 
       let repeatCount = 0;
-
       state.customersCRM = customers.map(c => {
         const orders = (c.orders || []).filter(o => {
           const d = o.created_at.split('T')[0];
@@ -1452,7 +1545,6 @@
 
         const visitCount = orders.length;
         const totalSpent = orders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
-
         if (visitCount > 1) repeatCount++;
 
         let drinkMap = {};
@@ -1475,7 +1567,6 @@
 
         const avgRatingNum = ratings.length ? (ratings.reduce((a, b) => a + b, 0) / ratings.length) : 0;
         const avgRating = avgRatingNum ? avgRatingNum.toFixed(1) + ' ★' : '--';
-
         const lastOrder = orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
         const lastVisitDate = lastOrder ? lastOrder.created_at.split('T')[0] : '-';
 
@@ -1491,11 +1582,6 @@
           avgRating
         };
       }).filter(c => c.visitCount > 0);
-
-      document.getElementById('crm-kpi-total').innerText = state.customersCRM.length;
-      document.getElementById('crm-kpi-repeats').innerText = repeatCount;
-      const rate = state.customersCRM.length ? Math.round((repeatCount / state.customersCRM.length) * 100) : 0;
-      document.getElementById('crm-kpi-rate').innerText = `${rate}%`;
 
       renderCustomerCRMTable(state.customersCRM);
     }
