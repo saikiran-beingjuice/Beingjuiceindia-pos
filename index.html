@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Be the Juice | India Terminal & OS</title>
+  <title>Be the Juice | Multi-Store Terminal & OS</title>
 
   <!-- External CDNs -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -12,16 +12,15 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <style>
-    /* Be the Juice India Brand Color Palette */
     :root {
-      --btj-pink: #EE3F7F;        /* Main Pink */
-      --btj-pink-hover: #c4245f;  /* Deep Pink */
-      --btj-navy: #21343C;        /* Contrast Ink */
-      --btj-cream: #FFF7F0;       /* Primary Canvas */
-      --btj-amber: #FCB449;       /* Secondary Pop */
-      --btj-lime: #A6CE43;        /* Function Green */
-      --btj-orange: #F68941;      /* Accent Orange */
-      --btj-veg: #0A8A3A;         /* FSSAI Veg-mark Green */
+      --btj-pink: #EE3F7F;
+      --btj-pink-hover: #c4245f;
+      --btj-navy: #21343C;
+      --btj-cream: #FFF7F0;
+      --btj-amber: #FCB449;
+      --btj-lime: #A6CE43;
+      --btj-orange: #F68941;
+      --btj-veg: #0A8A3A;
       --card: #ffffff;
       --border: #f0e6dc;
       --text: #21343C;
@@ -50,7 +49,25 @@
     .brand-container { display: flex; align-items: center; gap: 10px; }
     .brand-logo-text { font-size: 1.5rem; font-weight: 900; color: var(--btj-pink); letter-spacing: -0.5px; }
     .brand-logo-text span { color: var(--btj-navy); font-weight: 700; font-size: 1.1rem; }
-    .brand-pill { font-size: 0.7rem; font-weight: 800; color: var(--btj-navy); background: #fdf0e4; padding: 4px 9px; border-radius: 20px; letter-spacing: 0.5px; }
+    
+    .store-selector-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #fff8f3;
+      border: 1.5px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 10px;
+    }
+    .store-selector-bar select {
+      border: none;
+      background: transparent;
+      font-weight: 800;
+      color: var(--btj-navy);
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 4px;
+    }
 
     .nav-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
     .nav-tabs button {
@@ -89,7 +106,7 @@
     .view { display: none; }
     .view.active { display: block; }
 
-    /* Category Pill Selector */
+    /* Category Selector */
     .category-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 12px; }
     .cat-btn {
       padding: 7px 16px;
@@ -140,12 +157,11 @@
     .drink-info { padding: 12px; display: flex; flex-direction: column; gap: 4px; }
     .drink-cat { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; color: var(--btj-orange); }
     .drink-title { font-size: 0.95rem; font-weight: 800; color: var(--btj-navy); line-height: 1.25; }
-    
     .drink-meta { display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px; }
     .drink-price { font-size: 1.15rem; font-weight: 900; color: var(--btj-pink); }
     .drink-kcal { font-size: 0.8rem; font-weight: 800; color: var(--btj-navy); background: #fdf5ee; padding: 2px 6px; border-radius: 6px; }
 
-    /* Floating Cart Badge */
+    /* Cart FAB */
     .cart-fab {
       position: fixed;
       bottom: 24px;
@@ -228,7 +244,6 @@
       font-size: 0.78rem;
       font-weight: 800;
       color: var(--btj-navy);
-      transition: all 0.15s ease;
       text-align: center;
     }
     .disc-btn.active {
@@ -278,7 +293,6 @@
     .modal { display: none; position: fixed; inset: 0; background: rgba(33, 52, 60, 0.45); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 200; }
     .modal-box { background: white; padding: 24px; border-radius: 18px; width: 460px; border: 1px solid var(--border); max-width: 92vw; box-shadow: 0 15px 35px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
 
-    /* Toppings Selection */
     .toppings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
     .topping-card {
       border: 2px solid var(--border);
@@ -288,7 +302,6 @@
       align-items: center;
       gap: 10px;
       cursor: pointer;
-      transition: 0.15s;
     }
     .topping-card.selected { border-color: var(--btj-pink); background: #fff4f8; }
     .topping-img { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; }
@@ -304,7 +317,11 @@
     .vfm-btn { padding: 8px; border-radius: 8px; border: 1.5px solid var(--border); background: white; cursor: pointer; font-weight: 700; font-size: 0.82rem; }
     .vfm-btn.active { border-color: var(--btj-pink); background: #fff0f5; color: var(--btj-pink); }
 
-    /* Login Screen */
+    /* Operating days selector */
+    .day-selector { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+    .day-pill { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: #fffdfb; cursor: pointer; font-size: 0.75rem; font-weight: 800; }
+    .day-pill.active { background: var(--btj-pink); color: white; border-color: var(--btj-pink); }
+
     #login-overlay { position: fixed; inset: 0; background: linear-gradient(135deg, var(--btj-navy), var(--btj-pink)); z-index: 999; display: flex; align-items: center; justify-content: center; }
     .login-card { background: white; padding: 36px; border-radius: 20px; width: 360px; box-shadow: 0 15px 35px rgba(0,0,0,0.2); text-align: center; }
   </style>
@@ -331,14 +348,18 @@
   <header>
     <div class="brand-container">
       <div class="brand-logo-text">Be <span>the Juice</span></div>
-      <div class="brand-pill">India · 2026</div>
+      <div class="store-selector-bar">
+        <span style="font-size:0.85rem;">📍</span>
+        <select id="global-store-select" onchange="changeActiveStore()"></select>
+      </div>
     </div>
 
     <div class="nav-tabs">
       <button class="active" onclick="switchTab('pos')">🍹 Barista POS</button>
       <button onclick="switchTab('expense-entry')">💸 Log Expense</button>
       <button onclick="switchTab('history')">📜 Sales History</button>
-      <!-- Admin Only Navigation -->
+      <!-- Admin Only -->
+      <button class="admin-only" onclick="switchTab('stores-mgmt')">🏬 Store Management</button>
       <button class="admin-only" onclick="switchTab('accounting')">📑 Accounting Ledger</button>
       <button class="admin-only" onclick="switchTab('crm')">👥 Customer Insights</button>
       <button class="admin-only" onclick="switchTab('feedback')">⭐ Guest Feedback</button>
@@ -388,7 +409,7 @@
 
         <div class="cart-items" id="cart-list">Cart is empty</div>
 
-        <!-- DISCOUNT SELECTION BAR -->
+        <!-- DISCOUNT SELECTION -->
         <div class="discount-container">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <label style="font-size:0.78rem; font-weight:800; color:var(--btj-navy);">Apply Store Discount:</label>
@@ -404,13 +425,12 @@
       </div>
 
       <div>
-        <!-- Calculations Breakdown -->
         <div style="border-top:1px solid var(--border); padding-top:10px; margin-bottom:8px; font-size:0.85rem;">
           <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
             <span style="color:var(--text-muted);">Subtotal:</span>
             <span id="cart-subtotal-amt" style="font-weight:700;">₹0</span>
           </div>
-          <div style="display:flex; justify-content:space-between; margin-bottom:4px; color:var(--btj-pink);" id="cart-discount-row">
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px; color:var(--btj-pink);">
             <span>Discount Savings:</span>
             <span id="cart-discount-amt" style="font-weight:800;">-₹0</span>
           </div>
@@ -427,12 +447,81 @@
     </div>
   </div>
 
-  <!-- 2. STAFF EXPENSE ENTRY -->
+  <!-- 2. MULTI-STORE MANAGEMENT (NEW) -->
+  <section id="stores-mgmt-view" class="view">
+    <div class="admin-layout">
+      <!-- Create New Store Card -->
+      <div class="admin-box">
+        <h3>Create New Outlet / Store</h3>
+        <input type="text" id="new-store-name" placeholder="Store Name (e.g. DLF CyberCity Kiosk)" style="margin-bottom:10px;" />
+        <input type="text" id="new-store-tag" placeholder="Location Tag (e.g. Food Court Level 2)" style="margin-bottom:10px;" />
+        
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+          <div>
+            <label style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">Opening Time:</label>
+            <input type="time" id="new-store-open" value="08:00" />
+          </div>
+          <div>
+            <label style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">Closing Time:</label>
+            <input type="time" id="new-store-close" value="22:30" />
+          </div>
+        </div>
+
+        <label style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">Operating Days:</label>
+        <div class="day-selector" id="new-store-days">
+          <span class="day-pill active" onclick="this.classList.toggle('active')">Mon</span>
+          <span class="day-pill active" onclick="this.classList.toggle('active')">Tue</span>
+          <span class="day-pill active" onclick="this.classList.toggle('active')">Wed</span>
+          <span class="day-pill active" onclick="this.classList.toggle('active')">Thu</span>
+          <span class="day-pill active" onclick="this.classList.toggle('active')">Fri</span>
+          <span class="day-pill active" onclick="this.classList.toggle('active')">Sat</span>
+          <span class="day-pill active" onclick="this.classList.toggle('active')">Sun</span>
+        </div>
+
+        <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
+          <label style="font-size:0.8rem; font-weight:800; color:var(--btj-navy); display:block; margin-bottom:6px;">Menu Setup Strategy:</label>
+          <select id="new-store-menu-strategy" onchange="toggleReplicationSource()" style="margin-bottom:10px;">
+            <option value="replicate">Replicate Menu from Existing Store</option>
+            <option value="empty">Create New Clean Menu (Build from scratch)</option>
+          </select>
+
+          <div id="replicate-source-container">
+            <label style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">Replicate Menu & BOM From:</label>
+            <select id="replicate-source-store" style="margin-bottom:10px;"></select>
+          </div>
+        </div>
+
+        <button class="btn btn-pink" style="width:100%; margin-top:10px;" onclick="createNewStore()">Add Store to Network</button>
+      </div>
+
+      <!-- Active Stores List -->
+      <div class="admin-box" style="grid-column: span 2;">
+        <h3>All Stores & Operating Timings</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Store Name</th>
+              <th>Location</th>
+              <th>Operating Hours</th>
+              <th>Days Active</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="stores-table-body">
+            <tr><td colspan="6">Loading store network...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. EXPENSE ENTRY -->
   <section id="expense-entry-view" class="view">
     <div class="admin-box" style="max-width:520px; margin: 0 auto;">
       <h3>Record Storefront Expense</h3>
       <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:14px;">
-        Staff can record out-of-pocket store costs (produce, ice, repairs, packaging) with receipt photo uploads.
+        Staff can record out-of-pocket store costs for the active store with receipt uploads.
       </p>
 
       <label style="font-size:0.8rem; font-weight:800;">Expense Category:</label>
@@ -461,17 +550,17 @@
       <label style="font-size:0.8rem; font-weight:800;">Upload Receipt / Bill Photo:</label>
       <input type="file" id="exp-receipt-file" accept="image/*" style="margin-bottom:14px;" />
 
-      <button class="btn btn-pink" style="width:100%; padding:14px;" onclick="submitStaffExpense()">Submit Expense to Ledger</button>
+      <button class="btn btn-pink" style="width:100%; padding:14px;" onclick="submitStaffExpense()">Submit Expense to Store Ledger</button>
     </div>
   </section>
 
-  <!-- 3. ADMIN ACCOUNTING & EXPENSES LEDGER -->
+  <!-- 4. ACCOUNTING LEDGER -->
   <section id="accounting-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
         <div>
           <h3>Store Accounting & Cashflow Reconciliation</h3>
-          <p style="font-size:0.85rem; color:var(--text-muted);">Real-time income vs. expense tracking with downloadable bill receipts.</p>
+          <p style="font-size:0.85rem; color:var(--text-muted);">Real-time income vs. expense tracking for the selected store.</p>
         </div>
         <div style="display:flex; gap:8px;">
           <input type="date" id="acc-date-start" onchange="loadAccountingData()" style="width:auto; padding:6px 10px;" />
@@ -514,7 +603,7 @@
     </div>
   </section>
 
-  <!-- 4. SALES HISTORY (Role-Aware) -->
+  <!-- 5. SALES HISTORY -->
   <section id="history-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -541,7 +630,7 @@
     </div>
   </section>
 
-  <!-- 5. CUSTOMER INSIGHTS CRM (ADMIN ONLY) -->
+  <!-- 6. CUSTOMER INSIGHTS CRM -->
   <section id="crm-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -576,7 +665,7 @@
     </div>
   </section>
 
-  <!-- 6. GUEST FEEDBACK (ADMIN ONLY) -->
+  <!-- 7. GUEST FEEDBACK -->
   <section id="feedback-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
@@ -609,7 +698,7 @@
     </div>
   </section>
 
-  <!-- 7. INFOGRAPHICS (ADMIN ONLY) -->
+  <!-- 8. INFOGRAPHICS -->
   <section id="reports-view" class="view">
     <div class="admin-box">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -643,7 +732,7 @@
     </div>
   </section>
 
-  <!-- 8. MENU ADMIN (HARD DELETE & EDIT) -->
+  <!-- 9. MENU ADMIN -->
   <section id="admin-menu-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
@@ -654,12 +743,12 @@
         <input type="text" id="new-drink-cat" placeholder="Category (e.g. Hydration, Energy)" />
         <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:4px;">Upload Drink Image:</label>
         <input type="file" id="new-drink-file" accept="image/*" />
-        <button class="btn btn-pink" style="margin-top:10px;" onclick="addNewDrink()">Add to Menu</button>
+        <button class="btn btn-pink" style="margin-top:10px;" onclick="addNewDrink()">Add to Active Store</button>
       </div>
     </div>
 
     <div class="admin-box">
-      <h3>Active Drink Formulations</h3>
+      <h3>Active Drink Formulations (Active Store)</h3>
       <table>
         <thead>
           <tr>
@@ -676,7 +765,7 @@
     </div>
   </section>
 
-  <!-- 9. BOOSTERS & TOPPINGS ADMIN -->
+  <!-- 10. BOOSTERS ADMIN -->
   <section id="admin-toppings-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
@@ -702,7 +791,7 @@
     </div>
   </section>
 
-  <!-- 10. MULTI-BOM BUILDER -->
+  <!-- 11. MULTI-BOM BUILDER -->
   <section id="admin-bom-view" class="view">
     <div class="admin-box" style="max-width:700px;">
       <h3>Multi-Ingredient Recipe BOM Formulation</h3>
@@ -718,7 +807,7 @@
     </div>
   </section>
 
-  <!-- 11. GROCERY INWARD -->
+  <!-- 12. GROCERY INWARD -->
   <section id="admin-inventory-view" class="view">
     <div class="admin-layout">
       <div class="admin-box">
@@ -752,7 +841,7 @@
     </div>
   </section>
 
-  <!-- 12. UPI QR CODE SETTINGS -->
+  <!-- 13. UPI QR CODE SETTINGS -->
   <section id="admin-settings-view" class="view">
     <div class="admin-box" style="max-width:550px;">
       <h3>Storefront UPI QR Code</h3>
@@ -770,7 +859,7 @@
     </div>
   </section>
 
-  <!-- 13. USER MANAGEMENT -->
+  <!-- 14. USER MANAGEMENT -->
   <section id="admin-users-view" class="view">
     <div class="admin-box" style="max-width:550px;">
       <h3>Register Staff Member</h3>
@@ -889,6 +978,8 @@
     let state = {
       currentUser: null,
       staffList: [],
+      stores: [],
+      currentStoreId: null,
       drinks: [],
       toppings: [],
       inventory: [],
@@ -922,8 +1013,111 @@
       document.getElementById('acc-date-start').value = monthAgo;
       document.getElementById('acc-date-end').value = today;
 
+      await loadStores();
       await loadStaff();
       await loadAppSettings();
+    }
+
+    // --- MULTI-STORE TENANCY CONTROLLER ---
+    async function loadStores() {
+      const { data: storesList } = await client.from('stores').select('*').order('created_at', { ascending: true });
+      state.stores = storesList || [];
+
+      if (!state.stores.length) {
+        const { data: newS } = await client.from('stores').insert({ name: 'Flagship Store #1', city: 'Hyderabad', location_tag: 'Corporate Park' }).select().single();
+        state.stores = [newS];
+      }
+
+      if (!state.currentStoreId) {
+        state.currentStoreId = state.stores[0].id;
+      }
+
+      // Populate Global Store Switcher
+      const select = document.getElementById('global-store-select');
+      select.innerHTML = state.stores.map(s => `
+        <option value="${s.id}" ${s.id === state.currentStoreId ? 'selected' : ''}>${s.name} (${s.location_tag || s.city})</option>
+      `).join('');
+
+      // Populate Replicate dropdown
+      const repSelect = document.getElementById('replicate-source-store');
+      if (repSelect) {
+        repSelect.innerHTML = state.stores.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+      }
+
+      renderStoresTable();
+    }
+
+    async function changeActiveStore() {
+      state.currentStoreId = document.getElementById('global-store-select').value;
+      await refreshAllData();
+      renderCategories();
+      renderPOSMenu();
+    }
+
+    function toggleReplicationSource() {
+      const strategy = document.getElementById('new-store-menu-strategy').value;
+      document.getElementById('replicate-source-container').style.display = (strategy === 'replicate') ? 'block' : 'none';
+    }
+
+    async function createNewStore() {
+      const name = document.getElementById('new-store-name').value.trim();
+      const location_tag = document.getElementById('new-store-tag').value.trim();
+      const open_time = document.getElementById('new-store-open').value;
+      const close_time = document.getElementById('new-store-close').value;
+
+      const activeDays = Array.from(document.querySelectorAll('#new-store-days .day-pill.active')).map(p => p.innerText).join(',');
+      const strategy = document.getElementById('new-store-menu-strategy').value;
+      const sourceStoreId = document.getElementById('replicate-source-store').value;
+
+      if (!name) return alert('Store Name is required.');
+
+      const { data: newStore, error } = await client.from('stores').insert({
+        name,
+        location_tag,
+        open_time,
+        close_time,
+        operating_days: activeDays,
+        is_active: true
+      }).select().single();
+
+      if (error) return alert(error.message);
+
+      if (strategy === 'replicate' && sourceStoreId) {
+        await client.rpc('replicate_store_menu', {
+          source_store_id: sourceStoreId,
+          target_store_id: newStore.id
+        });
+      }
+
+      alert(`Store "${name}" successfully initialized!`);
+      document.getElementById('new-store-name').value = '';
+      document.getElementById('new-store-tag').value = '';
+      await loadStores();
+    }
+
+    function renderStoresTable() {
+      const tbody = document.getElementById('stores-table-body');
+      if (!tbody) return;
+
+      tbody.innerHTML = state.stores.map(s => `
+        <tr>
+          <td><strong>${s.name}</strong></td>
+          <td>${s.location_tag || '-'}, ${s.city || ''}</td>
+          <td>${s.open_time || '08:00'} - ${s.close_time || '22:00'}</td>
+          <td><span style="font-size:0.75rem; background:#fff2ea; color:var(--btj-navy); padding:3px 6px; border-radius:6px; font-weight:700;">${s.operating_days || 'All Days'}</span></td>
+          <td>${s.is_active ? '<span style="color:var(--btj-veg); font-weight:800;">OPEN</span>' : '<span style="color:var(--danger); font-weight:800;">CLOSED</span>'}</td>
+          <td>
+            <button class="btn btn-sm btn-pink" onclick="selectStoreDirectly('${s.id}')">Switch Terminal Here</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function selectStoreDirectly(id) {
+      state.currentStoreId = id;
+      document.getElementById('global-store-select').value = id;
+      changeActiveStore();
+      switchTab('pos');
     }
 
     async function loadAppSettings() {
@@ -1017,12 +1211,16 @@
       switchTab('pos');
     }
 
+    // --- REFRESH DATA (FILTERED BY ACTIVE STORE) ---
     async function refreshAllData() {
+      if (!state.currentStoreId) return;
+
       const [d, t, i] = await Promise.all([
-        client.from('drinks').select('*, recipe_items(*, inventory(*))'),
-        client.from('toppings').select('*, inventory(*)').eq('is_active', true),
-        client.from('inventory').select('*').order('name')
+        client.from('drinks').select('*, recipe_items(*, inventory(*))').eq('store_id', state.currentStoreId),
+        client.from('toppings').select('*, inventory(*)').eq('is_active', true).eq('store_id', state.currentStoreId),
+        client.from('inventory').select('*').eq('store_id', state.currentStoreId).order('name')
       ]);
+
       state.drinks = d.data || [];
       state.toppings = t.data || [];
       state.inventory = i.data || [];
@@ -1038,6 +1236,7 @@
 
       const map = {
         'pos': 'pos-view',
+        'stores-mgmt': 'stores-mgmt-view',
         'expense-entry': 'expense-entry-view',
         'accounting': 'accounting-view',
         'history': 'history-view',
@@ -1059,6 +1258,7 @@
       fab.style.display = (tab === 'pos') ? 'flex' : 'none';
 
       if (tab === 'pos') renderPOSMenu();
+      if (tab === 'stores-mgmt') renderStoresTable();
       if (tab === 'history') loadSalesHistory();
       if (tab === 'accounting') loadAccountingData();
       if (tab === 'crm') loadCustomerCRM();
@@ -1091,7 +1291,7 @@
       const filtered = state.drinks.filter(d => state.activeCategory === 'ALL' || d.category === state.activeCategory);
 
       if (!filtered.length) {
-        container.innerHTML = '<p style="color:var(--text-muted);">No blends in this category.</p>';
+        container.innerHTML = '<p style="color:var(--text-muted); padding:20px;">No drinks in this category for this outlet.</p>';
         return;
       }
 
@@ -1161,7 +1361,6 @@
       openDrawer();
     }
 
-    // --- DISCOUNT LOGIC ---
     function applyDiscount(percent) {
       state.discountPercent = percent;
       [0, 10, 15, 20].forEach(p => {
@@ -1293,6 +1492,7 @@
       const changeDue = Math.max(0, cashTendered - total);
 
       const { data: order, error: oErr } = await client.from('orders').insert({
+        store_id: state.currentStoreId,
         customer_id: customerId,
         subtotal_amount: subtotal,
         discount_percent: state.discountPercent,
@@ -1335,7 +1535,7 @@
       openFeedbackModal();
     }
 
-    // --- EXPENSES & ACCOUNTING MODULE ---
+    // --- EXPENSES ---
     async function submitStaffExpense() {
       const category = document.getElementById('exp-category').value;
       const amount = parseFloat(document.getElementById('exp-amount').value);
@@ -1348,6 +1548,7 @@
       const receiptUrl = await uploadImageFile(fileInput, 'receipts');
 
       const { error } = await client.from('expenses').insert({
+        store_id: state.currentStoreId,
         category,
         amount,
         payment_mode,
@@ -1372,8 +1573,8 @@
       const startDate = document.getElementById('acc-date-start').value;
       const endDate = document.getElementById('acc-date-end').value;
 
-      const { data: expenses } = await client.from('expenses').select('*').order('created_at', { ascending: false });
-      const { data: orders } = await client.from('orders').select('total_amount, created_at');
+      const { data: expenses } = await client.from('expenses').select('*').eq('store_id', state.currentStoreId).order('created_at', { ascending: false });
+      const { data: orders } = await client.from('orders').select('total_amount, created_at').eq('store_id', state.currentStoreId);
 
       const filteredExp = (expenses || []).filter(e => {
         const d = e.created_at.split('T')[0];
@@ -1492,6 +1693,7 @@
 
       const { data: orders } = await client.from('orders')
         .select('*, customers(name, phone), order_items(*)')
+        .eq('store_id', state.currentStoreId)
         .gte('created_at', start)
         .lte('created_at', end)
         .order('created_at', { ascending: false });
@@ -1500,7 +1702,7 @@
       const isAdmin = state.currentUser?.role === 'admin';
 
       if (!orders || !orders.length) {
-        tbody.innerHTML = `<tr><td colspan="${isAdmin ? 10 : 8}" style="text-align:center; color:var(--text-muted);">No sales recorded on this date.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${isAdmin ? 10 : 8}" style="text-align:center; color:var(--text-muted);">No sales recorded at this store today.</td></tr>`;
         return;
       }
 
@@ -1533,11 +1735,10 @@
       const startDate = document.getElementById('crm-date-start').value;
       const endDate = document.getElementById('crm-date-end').value;
 
-      const { data: customers, error } = await client.from('customers').select('*, orders(*, order_items(*))');
-      if (error) return tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger);">${error.message}</td></tr>`;
-
+      const { data: customers } = await client.from('customers').select('*, orders(*, order_items(*))');
       let repeatCount = 0;
-      state.customersCRM = customers.map(c => {
+
+      state.customersCRM = (customers || []).map(c => {
         const orders = (c.orders || []).filter(o => {
           const d = o.created_at.split('T')[0];
           return (!startDate || d >= startDate) && (!endDate || d <= endDate);
@@ -1622,7 +1823,7 @@
       renderCustomerCRMTable(state.customersCRM);
     }
 
-    // --- GUEST FEEDBACK WITH DATE FILTER & SORTING ---
+    // --- GUEST FEEDBACK ---
     async function loadAdminFeedbackTable() {
       const tbody = document.getElementById('admin-feedback-table-body');
       tbody.innerHTML = '<tr><td colspan="7">Loading customer feedback...</td></tr>';
@@ -1630,23 +1831,23 @@
       const startDate = document.getElementById('feedback-date-start').value;
       const endDate = document.getElementById('feedback-date-end').value;
 
-      const { data: items, error } = await client.from('order_items')
-        .select('*, orders(created_at, customers(name, phone))')
+      const { data: items } = await client.from('order_items')
+        .select('*, orders(created_at, store_id, customers(name, phone))')
         .not('feedback_rating', 'is', null)
         .order('id', { ascending: false });
 
-      if (error) return tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger);">${error.message}</td></tr>`;
-
-      state.feedbackList = (items || []).map(i => ({
-        id: i.id,
-        customerName: i.orders?.customers?.name || 'Guest',
-        phone: i.orders?.customers?.phone || '-',
-        drinkName: i.drink_name,
-        rating: i.feedback_rating || 0,
-        vfm: i.feedback_vfm || 'Fair',
-        suggestion: i.feedback_suggestion || 'None',
-        date: i.orders?.created_at ? i.orders.created_at.split('T')[0] : '-'
-      })).filter(f => (!startDate || f.date >= startDate) && (!endDate || f.date <= endDate));
+      state.feedbackList = (items || [])
+        .filter(i => i.orders?.store_id === state.currentStoreId)
+        .map(i => ({
+          id: i.id,
+          customerName: i.orders?.customers?.name || 'Guest',
+          phone: i.orders?.customers?.phone || '-',
+          drinkName: i.drink_name,
+          rating: i.feedback_rating || 0,
+          vfm: i.feedback_vfm || 'Fair',
+          suggestion: i.feedback_suggestion || 'None',
+          date: i.orders?.created_at ? i.orders.created_at.split('T')[0] : '-'
+        })).filter(f => (!startDate || f.date >= startDate) && (!endDate || f.date <= endDate));
 
       renderFeedbackTable(state.feedbackList);
     }
@@ -1654,7 +1855,7 @@
     function renderFeedbackTable(list) {
       const tbody = document.getElementById('admin-feedback-table-body');
       if (!list.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No feedback records found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No feedback records found for this store.</td></tr>';
         return;
       }
 
@@ -1681,7 +1882,7 @@
       renderFeedbackTable(state.feedbackList);
     }
 
-    // --- MENU ADMIN (HARD DELETE & EDIT) ---
+    // --- MENU ADMIN ---
     function renderAdminMenu() {
       const tbody = document.getElementById('admin-menu-body');
       tbody.innerHTML = state.drinks.map(d => `
@@ -1693,7 +1894,7 @@
           <td>${d.category}</td>
           <td>
             <button class="btn btn-sm" onclick="openEditDrinkModal('${d.id}')">Edit</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteDrinkPermanently('${d.id}', '${d.name.replace(/'/g, "\\'")}')">Delete Item</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteDrinkPermanently('${d.id}', '${d.name.replace(/'/g, "\\'")}')">Delete</button>
           </td>
         </tr>
       `).join('');
@@ -1710,6 +1911,7 @@
       const uploadedUrl = await uploadImageFile(fileInput);
 
       await client.from('drinks').insert({
+        store_id: state.currentStoreId,
         name,
         base_price: price,
         calories,
@@ -1791,6 +1993,7 @@
       const imgUrl = await uploadImageFile(fileInput);
 
       await client.from('toppings').insert({
+        store_id: state.currentStoreId,
         name,
         price,
         inventory_id,
@@ -1911,7 +2114,7 @@
       const name = document.getElementById('new-inv-name').value.trim();
       const unit = document.getElementById('new-inv-unit').value;
       if (!name) return alert('Enter name.');
-      await client.from('inventory').insert({ name, unit, stock_qty: 0 });
+      await client.from('inventory').insert({ store_id: state.currentStoreId, name, unit, stock_qty: 0 });
       document.getElementById('new-inv-name').value = '';
       await refreshAllData();
       renderInventoryModule();
@@ -1958,7 +2161,12 @@
       const start = `${date}T00:00:00.000Z`;
       const end = `${date}T23:59:59.999Z`;
 
-      const { data: orders } = await client.from('orders').select('*, order_items(*)').gte('created_at', start).lte('created_at', end);
+      const { data: orders } = await client.from('orders')
+        .select('*, order_items(*)')
+        .eq('store_id', state.currentStoreId)
+        .gte('created_at', start)
+        .lte('created_at', end);
+
       const dayOrders = orders || [];
 
       let rev = 0;
