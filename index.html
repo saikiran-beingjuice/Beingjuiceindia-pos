@@ -69,11 +69,30 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink)}
 .nav-btn:hover{background:var(--navy-2)}
 .nav-btn.active{background:var(--berry);color:#fff;font-weight:700}
 .nav-btn .ic{width:22px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--mango);color:var(--navy);font-size:12px;font-weight:800;border-radius:999px;padding:1px 8px}
+.nav-btn.active .nav-badge{background:#fff;color:var(--berry-deep)}
+.steps{display:flex;gap:6px;margin:14px 0}.steps div{flex:1;text-align:center;font-size:12px;font-weight:700;color:var(--muted)}
+.steps div i{display:block;height:6px;border-radius:999px;background:var(--line);margin-bottom:6px}
+.steps div.done{color:var(--leaf)}.steps div.done i{background:var(--leaf)}
+.steps div.now{color:var(--ink)}.steps div.now i{background:var(--mango)}
+.steps div.bad{color:var(--red)}.steps div.bad i{background:var(--red)}
+.timeline{border-left:2px solid var(--line);margin-left:6px;padding-left:16px}
+.timeline .ev{position:relative;padding-bottom:14px}
+.timeline .ev::before{content:'';position:absolute;left:-23px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--card);border:3px solid var(--navy-3)}
+.bill-row{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;text-align:left;width:100%;background:none;border-left:none;border-right:none;border-top:none}
+.bill-row:hover{background:var(--cream)}
+.bill-ic{width:42px;height:42px;border-radius:12px;background:var(--cream);display:grid;place-items:center;font-size:20px}
+.perm-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+.perm-grid label{display:flex;gap:8px;align-items:flex-start;font-size:14px;padding:6px 0;cursor:pointer}
+.perm-grid input{margin-top:3px;width:18px;height:18px;accent-color:var(--berry)}
+@media (max-width:560px){.perm-grid{grid-template-columns:1fr}}
 .side-foot{margin-top:auto;padding-top:16px;border-top:1px solid var(--navy-3);display:flex;align-items:center;gap:10px}
 .side-foot .av{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-weight:800;color:#fff;flex-shrink:0}
 .side-foot b{display:block;font-size:14px;color:#fff}
 .side-foot small{font-size:12px;color:#8FA4AD}
-.side-foot button{margin-left:auto;background:var(--navy-2);border:none;color:#fff;padding:8px 10px;border-radius:8px;font-size:13px}
+.me-btn{display:flex;gap:10px;align-items:center;background:none!important;border:none;color:inherit;text-align:left;padding:0!important;flex:1;min-width:0;margin:0!important}
+.me-btn b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-foot>button:last-child{margin-left:auto;background:var(--navy-2);border:none;color:#fff;padding:8px 10px;border-radius:8px;font-size:13px}
 main{min-width:0;display:flex;flex-direction:column}
 .topbar{display:flex;align-items:center;gap:12px;padding:14px 24px;position:sticky;top:0;z-index:40;background:rgba(255,247,240,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
 .topbar h1{font-size:22px;font-weight:700;letter-spacing:-.01em}
@@ -120,6 +139,7 @@ main{min-width:0;display:flex;flex-direction:column}
 .pill.low{background:#FFF3DC;color:#9A5B00}
 .pill.out{background:var(--red-wash);color:var(--red)}
 .pill.berry{background:var(--berry-wash);color:var(--berry-deep)}
+.pill.navy{background:var(--navy);color:#fff}
 .table-wrap{overflow-x:auto;margin-top:6px}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th{text-align:left;font-weight:600;color:var(--muted);font-size:13px;padding:10px 12px;border-bottom:1.5px solid var(--line);white-space:nowrap}
@@ -349,8 +369,8 @@ tr:last-child td{border-bottom:none}
     <div class="logo">Be <span>the Juice</span></div>
     <nav id="nav"></nav>
     <div class="side-foot">
-      <div class="av" id="me-av">?</div>
-      <div><b id="me-name">—</b><small id="me-role"></small></div>
+      <button class="me-btn" onclick="myAccountModal()" title="My account and PIN"><span class="av" id="me-av">?</span>
+      <span style="min-width:0"><b id="me-name">—</b><small id="me-role"></small></span></button>
       <button onclick="logout()">Sign out</button>
     </div>
   </aside>
@@ -452,7 +472,7 @@ const EXPENSE_CATS = [
   ['Store Utilities & Logistics','🚚','Utilities & transport'],
   ['Other Misc','🧾','Other']
 ];
-const PAY_OUT = [['Cash (Counter Drawer)','Cash from drawer'],['UPI / Online','UPI'],['Personal Paid (Reimbursement)','Paid myself']];
+const PAY_OUT = [['Cash (Counter Drawer)','Cash from drawer'],['UPI / Online','Store UPI'],['Personal Paid (Reimbursement)','Paid myself'],['Vendor to be paid','Not paid yet']];
 
 const state = {
   me: null, pin: null, loginStaff: [], stores: [], storeId: null,
@@ -486,6 +506,37 @@ const initials = n => String(n || '?').trim().split(/\s+/).map(w => w[0]).slice(
 const colorFor = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return FRUIT[h % FRUIT.length]; };
 const normPhone = p => { let d = String(p || '').replace(/\D/g, ''); if (d.length > 10) d = d.slice(-10); return d; };
 const isAdmin = () => state.me?.role === 'admin';
+// What each permission unlocks. Admins can always do everything.
+const PERMS = [
+  ['pos', 'Take orders', 'Counter'], ['sales_view', 'See the sales log', 'Counter'], ['void_bills', 'Void sales bills', 'Counter'],
+  ['expense_submit', 'Submit bills', 'Bills'], ['expense_approve', 'Approve, send back or reject bills', 'Bills'],
+  ['expense_pay', 'Record payments for approved bills', 'Bills'], ['expense_view_all', 'See every bill, not just their own', 'Bills'],
+  ['reports', 'Dashboards, money, customers, feedback', 'Insights'],
+  ['menu', 'Menu, boosters and recipes', 'Setup'], ['stock', 'Stock and restocking', 'Setup'],
+  ['outlets', 'Outlets and events', 'Setup'], ['settings', 'Payment settings', 'Setup']
+];
+const ACCESS_PRESETS = {
+  'Barista':       { perms: ['pos', 'sales_view', 'expense_submit'], limit: null },
+  'Store manager': { perms: ['pos', 'sales_view', 'void_bills', 'expense_submit', 'expense_approve', 'reports', 'menu', 'stock'], limit: 5000 },
+  'Finance':       { perms: ['expense_submit', 'expense_view_all', 'expense_approve', 'expense_pay', 'reports'], limit: null },
+  'Approver':      { perms: ['expense_submit', 'expense_approve'], limit: 2000 }
+};
+const can = p => isAdmin() || (state.me?.permissions || []).includes(p);
+// A person tied to an outlet can act on that outlet and the events it runs.
+// A person can work at their assigned outlets, plus the events those outlets run.
+const inScope = id => {
+  if (isAdmin() || state.me?.all_stores) return true;
+  const ids = (state.me?.store_ids || []).map(String);
+  if (ids.includes(String(id))) return true;
+  const s = state.stores.find(x => sameId(x.id, id));
+  return !!s && !!s.parent_store_id && ids.includes(String(s.parent_store_id));
+};
+function accessLabel(s) {
+  if (s.role === 'admin') return 'Admin';
+  const p = [...(s.permissions || [])].sort().join(',');
+  const hit = Object.entries(ACCESS_PRESETS).find(([, v]) => [...v.perms].sort().join(',') === p);
+  return hit ? hit[0] : 'Custom access';
+}
 const sameId = (a, b) => String(a) === String(b);
 const $ = id => document.getElementById(id);
 const newRef = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
@@ -564,7 +615,8 @@ let pinBuf = '', pinStaff = null;
 async function loadLoginStaff() {
   const g = $('staff-grid');
   if (!db) { g.innerHTML = emptyState("Can't reach the database", 'Open this file from your own computer or website, or explore with sample data below.'); return; }
-  const { data, error } = await db.from('staff').select('id, name, role, store_id, active, stores(name)').eq('active', true).order('name');
+  if (!state.stores.length) await loadStores();
+  const { data, error } = await db.from('staff').select('id, name, role, store_id, active, permissions, all_stores, staff_stores(store_id)').eq('active', true).order('name');
   if (error) {
     const offline = /DataClone|fetch|network|NetworkError/i.test(error.message);
     g.innerHTML = offline ? emptyState("Can't reach the database from here", 'This preview window blocks connections. Download the file and open it in Chrome, or host it on your website. Or explore with sample data below.')
@@ -575,7 +627,7 @@ async function loadLoginStaff() {
   g.innerHTML = state.loginStaff.length ? state.loginStaff.map((s, i) => `
     <button class="staff-tile" onclick="pickStaff(${i})">
       <div class="av" style="background:${colorFor(s.name)}">${esc(initials(s.name))}</div>
-      <b>${esc(s.name)}</b><small>${s.role === 'admin' ? 'Admin' : 'Barista'}${s.stores ? ', ' + esc(s.stores.name) : ''}</small>
+      <b>${esc(s.name)}</b><small>${accessLabel(s)}${s.role === 'admin' || s.all_stores ? '' : (() => { const n = (s.staff_stores || []).length, home = state.stores.find(x => sameId(x.id, s.store_id)); return home ? ', ' + esc(home.name) + (n > 1 ? ` +${n - 1}` : '') : ''; })()}</small>
     </button>`).join('') : emptyState('No crew yet', 'Add your first admin in Supabase (see setup.sql).');
 }
 function buildKeypad() {
@@ -620,12 +672,14 @@ async function submitPin() {
 async function enterApp() {
   $('login').classList.add('hidden');
   $('me-av').textContent = initials(state.me.name); $('me-av').style.background = colorFor(state.me.name);
-  $('me-name').textContent = state.me.name; $('me-role').textContent = isAdmin() ? 'Admin' : 'Barista';
+  $('me-name').textContent = state.me.name; $('me-role').textContent = accessLabel(state.me);
   await loadStores();
   if (state.me.store_id && state.stores.some(s => sameId(s.id, state.me.store_id))) state.storeId = String(state.me.store_id);
+  if (!inScope(state.storeId)) { const first = state.stores.find(s => inScope(s.id)); if (first) state.storeId = String(first.id); }
   renderStoreSelect(); renderNav(); applyStorePresets();
   await Promise.all([loadSettings(), refreshStore()]);
   renderTicket(); go('pos');
+  if (state.me.must_change_pin) myAccountModal(true);
 }
 function logout() {
   state.me = null; state.pin = null; state.cart = []; pinBuf = '';
@@ -637,27 +691,44 @@ function logout() {
    NAVIGATION
    ========================================================= */
 const NAV = [
-  { g:'Counter', items:[['pos','🍹','Take orders'],['sales','🧾','Sales log'],['expense','💸','Log an expense']] },
-  { g:'Insights', admin:true, items:[['dashboard','📊','Dashboard'],['accounts','📒','Money in & out'],['customers','👥','Customers'],['feedback','⭐','Feedback']] },
-  { g:'Setup', admin:true, items:[['menu','🍍','Menu'],['boosters','🫐','Boosters'],['recipes','🧪','Recipes'],['inventory','📦','Stock'],['stores','🎪','Outlets & events'],['staff','🧑‍🍳','Staff'],['settings','⚙️','Payment settings']] }
+  { g:'Counter', items:[
+    ['pos','🍹','Take orders', () => can('pos')],
+    ['sales','🧾','Sales log', () => can('sales_view')],
+    ['expense','💸','Bills & expenses', () => can('expense_submit') || can('expense_view_all') || can('expense_approve') || can('expense_pay')] ] },
+  { g:'Insights', items:[
+    ['dashboard','📊','Dashboard', () => can('reports')],
+    ['accounts','📒','Money in & out', () => can('reports')],
+    ['customers','👥','Customers', () => can('reports')],
+    ['feedback','⭐','Feedback', () => can('reports')] ] },
+  { g:'Setup', items:[
+    ['menu','🍍','Menu', () => can('menu')],
+    ['boosters','🫐','Boosters', () => can('menu')],
+    ['recipes','🧪','Recipes', () => can('menu')],
+    ['inventory','📦','Stock', () => can('stock')],
+    ['stores','🎪','Outlets & events', () => can('outlets')],
+    ['staff','🧑‍🍳','Users & access', () => isAdmin()],
+    ['settings','⚙️','Payment settings', () => can('settings')] ] }
 ];
 const TITLES = Object.fromEntries(NAV.flatMap(g => g.items.map(i => [i[0], i[2]])));
 const RENDER = {};
+const allowedViews = () => NAV.flatMap(g => g.items.filter(i => i[3]()).map(i => i[0]));
 function renderNav() {
-  $('nav').innerHTML = NAV.filter(g => !g.admin || isAdmin()).map(g => `
-    <div class="nav-group">${g.g}</div>
-    ${g.items.map(([v, ic, label]) => `<button class="nav-btn" data-v="${v}" onclick="go('${v}')"><span class="ic">${ic}</span>${label}</button>`).join('')}
-  `).join('');
+  $('nav').innerHTML = NAV.map(g => {
+    const items = g.items.filter(i => i[3]()); if (!items.length) return '';
+    return `<div class="nav-group">${g.g}</div>` + items.map(([v, ic, label]) => `<button class="nav-btn" data-v="${v}" onclick="go('${v}')"><span class="ic">${ic}</span>${label}${v === 'expense' ? '<span class="nav-badge hidden" id="bill-badge"></span>' : ''}</button>`).join('');
+  }).join('');
+  refreshBillBadge();
 }
 function go(v) {
-  const allowed = NAV.filter(g => !g.admin || isAdmin()).flatMap(g => g.items.map(i => i[0]));
-  if (!allowed.includes(v)) v = 'pos';
+  const allowed = allowedViews();
+  if (!allowed.includes(v)) v = allowed[0] || 'pos';
   state.view = v;
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('active', s.id === 'v-' + v));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.v === v));
-  $('page-title').textContent = TITLES[v];
+  $('page-title').textContent = TITLES[v] || '';
   $('side').classList.remove('open');
   window.scrollTo(0, 0);
+  if (!allowed.length) { $('v-pos').innerHTML = `<div class="panel">${emptyState('No access yet', 'Ask an admin to give you access in Team & access.')}</div>`; return; }
   RENDER[v] && RENDER[v]();
 }
 function toggleSide() { $('side').classList.toggle('open'); }
@@ -674,8 +745,8 @@ async function loadStores() {
   renderStoreSelect();
 }
 // Outlets and events grouped. The top-bar switcher hides finished or cancelled events.
-function storeOptions(selected, { allOption = '', switcher = false } = {}) {
-  const keep = s => !switcher || sameId(s.id, selected) || !isEvent(s) || ['live', 'upcoming'].includes(eventState(s)[0]);
+function storeOptions(selected, { allOption = '', switcher = false, scoped = false } = {}) {
+  const keep = s => (!switcher || sameId(s.id, selected) || !isEvent(s) || ['live', 'upcoming'].includes(eventState(s)[0])) && (!(switcher || scoped) || inScope(s.id));
   const outlets = state.stores.filter(s => !isEvent(s) && keep(s));
   const events = state.stores.filter(s => isEvent(s) && keep(s)).sort((a, b) => (a.event_start || '').localeCompare(b.event_start || ''));
   const opt = s => `<option value="${esc(s.id)}" ${sameId(s.id, selected) ? 'selected' : ''}>${esc(s.name)}${isEvent(s) ? ` (${eventState(s)[1]})` : ''}</option>`;
@@ -686,7 +757,7 @@ function storeOptions(selected, { allOption = '', switcher = false } = {}) {
 function renderStoreSelect() {
   const sel = $('store-select');
   sel.innerHTML = storeOptions(state.storeId, { switcher: true }) || '<option>No outlets yet</option>';
-  sel.disabled = !isAdmin();
+  sel.disabled = sel.options.length <= 1;
   $('store-emoji').textContent = isEvent(currentStore()) ? '🎪' : '📍';
 }
 // Inside an event, reports default to "Whole event"; back at an outlet they return to normal.
@@ -1060,9 +1131,9 @@ RENDER.sales = async function () {
       <input type="date" class="input" style="width:auto" value="${d}" max="${todayIST()}" onchange="state.salesDate=this.value;RENDER.sales()">
       <button class="btn ghost sm" onclick="state.salesDate=todayIST();RENDER.sales()">Today</button>
       <span class="muted small">${longDate(d)}</span><span class="spacer"></span>
-      ${isAdmin() ? '<button class="btn ghost sm" onclick="exportSales()">Download Excel</button>' : ''}
+      ${can('reports') ? '<button class="btn ghost sm" onclick="exportSales()">Download Excel</button>' : ''}
     </div><div id="sales-body">${LOADING}</div>`;
-  const cols = isAdmin() ? '*, customers(name, phone), order_items(drink_name, selected_addons)' : 'id, receipt_no, created_at, total_amount, subtotal_amount, discount_amount, discount_percent, payment_method, barista_name, customer_id, status, order_items(drink_name, selected_addons)';
+  const cols = can('reports') ? '*, customers(name, phone), order_items(drink_name, selected_addons)' : 'id, receipt_no, created_at, total_amount, subtotal_amount, discount_amount, discount_percent, payment_method, barista_name, customer_id, status, order_items(drink_name, selected_addons)';
   const orders = await fetchAll(() => db.from('orders').select(cols).eq('store_id', state.storeId).gte('created_at', dayStart(d)).lte('created_at', dayEnd(d)).order('created_at', { ascending: false }), 'Loading sales');
   state.cache.sales = orders;
   if (state.view !== 'sales') return;
@@ -1083,7 +1154,7 @@ RENDER.sales = async function () {
     return [...m.values()].map(e => `${e.n > 1 ? `<b>${e.n}×</b> ` : ''}${esc(e.name)}${e.ad ? ` <span class="muted">+${esc(e.ad)}</span>` : ''}`).join('<br>'); };
 
   $('sales-body').innerHTML = `
-    ${dupCount && isAdmin() ? `<div class="panel" style="margin-bottom:16px;border-left:5px solid var(--mango)"><h3>${dupCount} bill${dupCount > 1 ? 's look' : ' looks'} like a repeat</h3>
+    ${dupCount && can('void_bills') ? `<div class="panel" style="margin-bottom:16px;border-left:5px solid var(--mango)"><h3>${dupCount} bill${dupCount > 1 ? 's look' : ' looks'} like a repeat</h3>
       <p class="sub" style="margin:0">Same guest, same drinks and same total within 3 minutes. Check with the barista, then tap Void on the extra one. Voided bills stay in history but leave every total, and their stock goes back.</p></div>` : ''}
     <div class="grid g4" style="margin-bottom:16px">
       ${kpi('Sales', inr(rev), '', 'var(--berry)')}
@@ -1094,17 +1165,17 @@ RENDER.sales = async function () {
     <div class="panel" style="margin-bottom:16px"><h3>How guests paid</h3>
       ${stackBar(['UPI', 'CARD', 'CASH'].map(k => ({ k: PAY_NAMES[k], v: byPay[k] || 0, c: PAY_COLORS[k], label: inr(byPay[k] || 0) })))}</div>
     <div class="panel"><div class="table-wrap"><table>
-      <thead><tr><th>Time</th><th>Receipt</th>${isAdmin() ? '<th>Guest</th>' : ''}<th>Drinks</th><th>Barista</th><th>Paid by</th><th style="text-align:right">Total</th>${isAdmin() ? '<th></th>' : ''}</tr></thead>
+      <thead><tr><th>Time</th><th>Receipt</th>${can('reports') ? '<th>Guest</th>' : ''}<th>Drinks</th><th>Barista</th><th>Paid by</th><th style="text-align:right">Total</th>${can('void_bills') ? '<th></th>' : ''}</tr></thead>
       <tbody>${orders.map((o, i) => { const v = o.status === 'void'; return `<tr style="${v ? 'opacity:.5' : o._dupOf ? 'background:#FFF6E6' : ''}">
         <td>${timeOf(o.created_at)}</td>
         <td><b style="${v ? 'text-decoration:line-through' : ''}">${esc(o.receipt_no || String(o.id).slice(0, 8))}</b>
           ${v ? `<br><span class="pill out">Voided</span> <span class="small muted">${esc(o.void_reason || '')}</span>` : o._dupOf ? `<br><span class="pill low">Repeat of ${esc(o._dupOf)}?</span>` : ''}</td>
-        ${isAdmin() ? `<td>${esc(o.customers?.name || 'Guest')}<br><span class="muted small">${esc(o.customers?.phone || '')}</span></td>` : ''}
+        ${can('reports') ? `<td>${esc(o.customers?.name || 'Guest')}<br><span class="muted small">${esc(o.customers?.phone || '')}</span></td>` : ''}
         <td class="small">${drinkList(o)}</td>
         <td>${esc(o.barista_name || '—')}</td>
         <td><span class="pill" style="background:${PAY_COLORS[o.payment_method] || '#ccc'};color:#fff">${esc(PAY_NAMES[o.payment_method] || o.payment_method)}</span></td>
         <td style="text-align:right"><span class="money" style="${v ? 'text-decoration:line-through' : ''}">${inr(o.total_amount)}</span>${Number(o.discount_amount) ? `<br><span class="small" style="color:var(--berry-deep)">${o.discount_percent}% off</span>` : ''}</td>
-        ${isAdmin() ? `<td>${v ? '' : `<button class="btn ${o._dupOf ? 'danger' : 'ghost'} sm" onclick="voidModal(${i})">Void</button>`}</td>` : ''}
+        ${can('void_bills') ? `<td>${v ? '' : `<button class="btn ${o._dupOf ? 'danger' : 'ghost'} sm" onclick="voidModal(${i})">Void</button>`}</td>` : ''}
       </tr>`; }).join('')}</tbody></table></div></div>`;
 };
 function voidModal(i) {
@@ -1132,39 +1203,267 @@ function exportSales() {
 /* =========================================================
    LOG AN EXPENSE
    ========================================================= */
-state.exp = { cat: EXPENSE_CATS[0][0], pay: PAY_OUT[0][0] };
+/* =========================================================
+   BILLS & EXPENSES: submit -> approve -> pay
+   Every step is checked again inside the database, so the
+   buttons here are a convenience, not the only lock.
+   ========================================================= */
+const BILL_STATUS = {
+  submitted: ['Waiting for approval', 'low'], sent_back: ['Sent back to fix', 'berry'], approved: ['Approved, to be paid', 'navy'],
+  rejected: ['Rejected', 'out'], paid: ['Paid', 'ok'], cancelled: ['Withdrawn', '']
+};
+const PAY_METHODS = ['Bank transfer', 'UPI', 'Cash', 'Cheque', 'Counter cash (already paid)'];
+const catInfo = c => EXPENSE_CATS.find(x => x[0] === c) || [c, '🧾', c];
+const billPill = st => { const [l, c] = BILL_STATUS[st] || [st, '']; return `<span class="pill ${c}">${l}</span>`; };
+const isMine = e => sameId(e.submitted_by_id, state.me.id) || (!e.submitted_by_id && e.submitted_by === state.me.name);
+const overMyLimit = e => !isAdmin() && state.me.approval_limit != null && Number(e.amount) > Number(state.me.approval_limit);
+const photoLimit = () => Number(state.settings.bill_photo_required_above ?? 200);
+state.bill = { tab: null, cat: EXPENSE_CATS[0][0], pay: PAY_OUT[0][0], filter: 'open', q: '' };
+
+function billBuckets(rows) {
+  const mine = rows.filter(isMine);
+  const toApprove = can('expense_approve') ? rows.filter(e => e.status === 'submitted' && inScope(e.store_id) && (isAdmin() || !isMine(e))) : [];
+  const toPay = can('expense_pay') ? rows.filter(e => e.status === 'approved' && inScope(e.store_id) && (isAdmin() || !isMine(e))) : [];
+  const everyone = (isAdmin() || can('expense_view_all')) ? rows.filter(e => inScope(e.store_id)) : null;
+  return { mine, toApprove, toPay, everyone };
+}
+async function loadBills() {
+  const since = new Date(Date.now() - 400 * 864e5).toISOString();
+  return fetchAll(() => {
+    let q = db.from('expenses').select('*, stores(name)').or(`status.in.(submitted,sent_back,approved),created_at.gte.${since}`).order('created_at', { ascending: false });
+    if (!isAdmin() && !state.me.all_stores) q = q.in('store_id', state.stores.filter(s => inScope(s.id)).map(s => String(s.id)));
+    return q;
+  }, 'Loading bills');
+}
+async function refreshBillBadge() {
+  const el = $('bill-badge'); if (!el || !state.me) return;
+  const { data } = await db.from('expenses').select('id, status, submitted_by_id, submitted_by, store_id, amount').in('status', ['submitted', 'approved', 'sent_back']);
+  const b = billBuckets(data || []);
+  const n = b.toApprove.length + b.toPay.length + b.mine.filter(e => e.status === 'sent_back').length;
+  el.textContent = n; el.classList.toggle('hidden', !n);
+}
+
 RENDER.expense = async function () {
   const el = $('v-expense');
-  el.innerHTML = `<div class="grid g2" style="align-items:start">
-    <div class="panel">
-      <h3>What did you buy?</h3><p class="sub">Spending for ${esc(currentStore()?.name || 'this store')}.</p>
-      <div class="tiles" style="margin-bottom:16px">${EXPENSE_CATS.map(([v, e, l]) => `<button class="tile ${state.exp.cat === v ? 'on' : ''}" onclick="state.exp.cat='${v}';RENDER.expense()"><span class="e">${e}</span>${l}</button>`).join('')}</div>
-      <div class="field"><label for="exp-amt">Amount</label><input class="input" id="exp-amt" type="number" inputmode="decimal" placeholder="₹ 0" style="font-size:24px;font-weight:800"></div>
-      <div class="field"><label>Paid with</label><div class="seg">${PAY_OUT.map(([v, l]) => `<button class="${state.exp.pay === v ? 'on' : ''}" onclick="state.exp.pay='${v}';this.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===this))">${l}</button>`).join('')}</div></div>
-      <div class="field"><label for="exp-notes">Vendor or note</label><input class="input" id="exp-notes" placeholder="10 kg oranges from Bowenpally mandi"></div>
-      <div class="field"><label for="exp-file">Bill photo</label><input class="input" id="exp-file" type="file" accept="image/*" capture="environment" onchange="previewBill(this)">
-        <img id="exp-prev" class="hidden" style="max-width:100%;max-height:180px;border-radius:12px;margin-top:8px;object-fit:contain"></div>
-      <button class="btn berry lg block" id="exp-go" onclick="saveExpense()">Save expense</button>
-    </div>
-    <div class="panel"><h3>Your recent entries</h3><p class="sub">Last 10 expenses you logged at this store.</p><div id="exp-recent">${emptyState('Loading…', '')}</div></div>
-  </div>`;
-  const { data } = await db.from('expenses').select('*').eq('store_id', state.storeId).eq('submitted_by', state.me.name).order('created_at', { ascending: false }).limit(10);
+  if (!el.innerHTML) el.innerHTML = LOADING;
+  const rows = await loadBills();
   if (state.view !== 'expense') return;
-  $('exp-recent').innerHTML = (data || []).length ? `<div class="table-wrap"><table><tbody>${data.map(e => `<tr>
-      <td><b>${esc(e.category)}</b><br><span class="muted small">${prettyDate(ist(e.created_at).date)}, ${esc(e.notes || 'No note')}</span></td>
-      <td style="text-align:right"><span class="money" style="color:var(--red)">−${inr(e.amount)}</span><br>${e.receipt_url ? `<a class="small" href="${esc(e.receipt_url)}" target="_blank" rel="noopener">View bill</a>` : '<span class="small muted">No bill</span>'}</td>
-    </tr>`).join('')}</tbody></table></div>` : emptyState('Nothing logged yet', 'Expenses you save will appear here.');
+  state.cache.bills = rows;
+  const B = billBuckets(rows);
+  const tabs = [];
+  if (B.toApprove.length || can('expense_approve')) tabs.push(['approve', 'To approve', B.toApprove.length]);
+  if (B.toPay.length || can('expense_pay')) tabs.push(['pay', 'To pay', B.toPay.length]);
+  if (can('expense_submit')) { tabs.push(['new', '+ New bill', 0]); tabs.push(['mine', 'My bills', B.mine.filter(e => e.status === 'sent_back').length]); }
+  if (B.everyone) tabs.push(['all', 'All bills', 0]);
+  if (!tabs.some(t => t[0] === state.bill.tab)) state.bill.tab = B.toApprove.length ? 'approve' : B.toPay.length ? 'pay' : (tabs[0] || [])[0];
+  const base = B.everyone || [...new Map([...B.mine, ...B.toApprove, ...B.toPay].map(e => [e.id, e])).values()];
+  const month = todayIST().slice(0, 7);
+  const sumOf = l => inr(sum(l, e => e.amount));
+  const waitA = base.filter(e => e.status === 'submitted'), waitP = base.filter(e => e.status === 'approved');
+  const paidM = base.filter(e => e.status === 'paid' && String(e.paid_on || (e.paid_at ? ist(e.paid_at).date : '')).slice(0, 7) === month);
+  const back = base.filter(e => e.status === 'sent_back');
+
+  el.innerHTML = `
+    <div class="grid g4" style="margin-bottom:16px">
+      ${kpi('Waiting for approval', sumOf(waitA), `<span class="delta flat">${waitA.length} bill${waitA.length === 1 ? '' : 's'}</span>`, 'var(--mango)')}
+      ${kpi('Approved, to be paid', sumOf(waitP), `<span class="delta flat">${waitP.length} bill${waitP.length === 1 ? '' : 's'}</span>`, 'var(--navy)')}
+      ${kpi('Paid this month', sumOf(paidM), `<span class="delta flat">${paidM.length} bill${paidM.length === 1 ? '' : 's'}</span>`, 'var(--leaf)')}
+      ${kpi('Sent back to fix', back.length, '<span class="delta flat">Waiting on the person who submitted</span>', 'var(--berry)')}
+    </div>
+    <div class="period"><div class="seg" style="flex:0 1 auto">${tabs.map(([k, l, n]) => `<button class="${state.bill.tab === k ? 'on' : ''}" onclick="state.bill.tab='${k}';RENDER.expense()">${l}${n ? ` <span class="pill ${k === 'mine' ? 'berry' : 'low'}" style="margin-left:4px">${n}</span>` : ''}</button>`).join('')}</div></div>
+    <div id="bill-body"></div>`;
+
+  const body = $('bill-body'), t = state.bill.tab;
+  if (t === 'new') return drawBillForm(body);
+  if (t === 'approve') body.innerHTML = `<div class="panel"><h3>Bills waiting for your approval</h3><p class="sub">Oldest first. Open a bill to check the photo, then approve, send back or reject.${!isAdmin() && state.me.approval_limit != null ? ` Your approval limit is ${inr(state.me.approval_limit)}.` : ''}</p>${billList([...B.toApprove].reverse(), 'Nothing to approve', 'New bills from the team will show up here.')}</div>`;
+  if (t === 'pay') body.innerHTML = `<div class="panel"><h3>Approved bills to pay</h3><p class="sub">Pay the vendor or the team member, then record it with the UTR or reference number.</p>${billList([...B.toPay].reverse(), 'Nothing to pay', 'Bills show up here once they are approved.')}</div>`;
+  if (t === 'mine') body.innerHTML = `<div class="panel"><h3>Bills you submitted</h3><p class="sub">Tap a bill to see where it is. Bills sent back need fixing before they can be approved.</p>${billList(B.mine, 'No bills yet', 'Submit your first bill from "+ New bill".')}</div>`;
+  if (t === 'all') {
+    const f = state.bill.filter, q = state.bill.q.toLowerCase();
+    const list = B.everyone.filter(e => (f === 'all' || (f === 'open' ? ['submitted', 'sent_back', 'approved'].includes(e.status) : e.status === f)) &&
+      (!q || [e.vendor, e.invoice_no, e.notes, e.submitted_by, e.category, e.stores?.name].some(x => String(x || '').toLowerCase().includes(q))));
+    body.innerHTML = `<div class="panel"><div class="row" style="margin-bottom:10px">
+        <div class="chips">${[['open', 'Open'], ['submitted', 'Waiting approval'], ['approved', 'To pay'], ['sent_back', 'Sent back'], ['paid', 'Paid'], ['rejected', 'Rejected'], ['cancelled', 'Withdrawn'], ['all', 'Everything']].map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" onclick="state.bill.filter='${k}';RENDER.expense()">${l}</button>`).join('')}</div>
+        <span class="spacer"></span><input class="input" style="max-width:220px" placeholder="Search vendor, invoice, person" value="${esc(state.bill.q)}" onchange="state.bill.q=this.value;RENDER.expense()">
+        <button class="btn ghost sm" onclick="exportBills()">Download</button></div>
+      ${billList(list, 'No bills match', 'Try another filter.')}</div>`;
+  }
 };
-function previewBill(input) { const f = input.files[0], img = $('exp-prev'); if (!f) return img.classList.add('hidden'); img.src = URL.createObjectURL(f); img.classList.remove('hidden'); }
-async function saveExpense() {
-  const amount = parseFloat($('exp-amt').value);
-  if (!(amount > 0)) return toast('Enter how much you spent', 'err');
-  const btn = $('exp-go'); btn.disabled = true; btn.textContent = 'Saving…';
-  const receipt_url = await upload($('exp-file'), 'receipts');
-  const { error } = await db.from('expenses').insert({ store_id: state.storeId, category: state.exp.cat, amount, payment_mode: state.exp.pay, notes: $('exp-notes').value.trim(), receipt_url, submitted_by: state.me.name });
-  btn.disabled = false; btn.textContent = 'Save expense';
-  if (fail(error, 'Saving expense')) return;
-  toast(`Expense saved: ${inr(amount)}`, 'ok'); RENDER.expense();
+function billList(list, emptyT, emptyB) {
+  if (!list.length) return emptyState(emptyT, emptyB);
+  return list.map(e => { const c = catInfo(e.category);
+    return `<button class="bill-row" onclick="billModal('${esc(e.id)}')">
+      <span class="bill-ic">${c[1]}</span>
+      <span><b>${esc(e.vendor || c[2])}</b>${e.invoice_no ? ` <span class="muted small">#${esc(e.invoice_no)}</span>` : ''}<br>
+        <span class="small muted">${esc(e.stores?.name || '')}, ${prettyDate(e.bill_date || ist(e.created_at).date)}, by ${esc(e.submitted_by || '—')}</span>
+        ${e.duplicate_of && ['submitted', 'approved'].includes(e.status) ? ' <span class="pill low">Possible repeat</span>' : ''}
+        ${e.status === 'submitted' && can('expense_approve') && overMyLimit(e) ? ' <span class="pill">Above your limit</span>' : ''}
+        ${!e.receipt_url ? ' <span class="pill">No photo</span>' : ''}</span>
+      <span style="text-align:right"><b class="money" style="font-size:17px">${inr(e.amount)}</b><br>${billPill(e.status)}</span>
+    </button>`; }).join('');
+}
+
+/* ---------- submit ---------- */
+function drawBillForm(body, e = null) {
+  const scoped = state.stores.filter(s => inScope(s.id));
+  const def = e ? e.store_id : (inScope(state.storeId) ? state.storeId : scoped[0]?.id);
+  body.innerHTML = `<div class="grid g2" style="align-items:start">
+    <div class="panel">
+      <h3>${e ? 'Fix and resubmit' : 'New bill'}</h3><p class="sub">${e ? `Sent back by ${esc(e.decided_by || 'the approver')}: "${esc(e.decision_note || '')}"` : 'It goes to an approver first, then to finance for payment.'}</p>
+      <div class="field"><label for="bl-store">For</label><select class="input" id="bl-store">${storeOptions(def, { scoped: true })}</select></div>
+      <div class="field"><label>What was it for?</label><div class="tiles">${EXPENSE_CATS.map(([v, ic, l]) => `<button type="button" class="tile ${(e ? e.category : state.bill.cat) === v ? 'on' : ''}" data-v="${esc(v)}" onclick="state.bill.cat=this.dataset.v;this.parentNode.querySelectorAll('.tile').forEach(b=>b.classList.toggle('on',b===this))"><span class="e">${ic}</span>${l}</button>`).join('')}</div></div>
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><label for="bl-amt">Amount</label><input class="input" id="bl-amt" type="number" inputmode="decimal" placeholder="₹ 0" value="${e ? esc(e.amount) : ''}" style="font-size:22px;font-weight:800"></div>
+        <div class="field"><label for="bl-date">Bill date</label><input class="input" id="bl-date" type="date" max="${todayIST()}" value="${e?.bill_date || todayIST()}"></div></div>
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><label for="bl-vendor">Vendor</label><input class="input" id="bl-vendor" value="${esc(e?.vendor || '')}" placeholder="Bowenpally mandi"></div>
+        <div class="field"><label for="bl-inv">Invoice or bill number</label><input class="input" id="bl-inv" value="${esc(e?.invoice_no || '')}" placeholder="Optional"></div></div>
+      <div class="field"><label>How was it paid?</label><div class="seg" id="bl-pay">${PAY_OUT.map(([v, l]) => `<button type="button" class="${(e ? e.payment_mode : state.bill.pay) === v ? 'on' : ''}" data-v="${esc(v)}" onclick="state.bill.pay=this.dataset.v;this.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===this))">${l}</button>`).join('')}</div></div>
+      <div class="field"><label for="bl-notes">Note</label><input class="input" id="bl-notes" value="${esc(e?.notes || '')}" placeholder="10 kg Valencia oranges"></div>
+      <div class="field"><label for="bl-file">Bill photo ${photoLimit() > 0 ? `(needed above ${inr(photoLimit())})` : '(needed)'}${e?.receipt_url ? ', leave empty to keep the current one' : ''}</label>
+        <input class="input" id="bl-file" type="file" accept="image/*,application/pdf" capture="environment" onchange="previewBill(this)">
+        <img id="exp-prev" class="hidden" style="max-width:100%;max-height:180px;border-radius:12px;margin-top:8px;object-fit:contain"></div>
+      ${e ? `<div class="field"><label for="bl-change">What did you change?</label><input class="input" id="bl-change" placeholder="Corrected the invoice number"></div>` : ''}
+      <button class="btn berry lg block" id="bl-go" onclick="saveBill(${e ? `'${esc(e.id)}'` : 'null'})">${e ? 'Resubmit for approval' : 'Submit for approval'}</button>
+    </div>
+    <div class="panel"><h3>How bills move</h3>
+      <div class="timeline" style="margin-top:12px">
+        <div class="ev"><b>1. Submitted</b><div class="small muted">You add the bill with a photo. It can't be changed after this unless it's sent back.</div></div>
+        <div class="ev"><b>2. Approved</b><div class="small muted">Someone else checks it. Nobody can approve their own bill, and each approver has a limit.</div></div>
+        <div class="ev"><b>3. Paid</b><div class="small muted">Finance pays and records the UTR or reference. The amount has to match what was approved.</div></div>
+      </div>
+      <p class="small muted">Every step is saved with who did it and when. Bills that look like a repeat of an earlier one are flagged for the approver.</p></div>
+  </div>`;
+}
+function previewBill(input) { const f = input.files[0], img = $('exp-prev'); if (!f || !/^image/.test(f.type)) return img.classList.add('hidden'); img.src = URL.createObjectURL(f); img.classList.remove('hidden'); }
+async function saveBill(id) {
+  const amount = parseFloat($('bl-amt').value);
+  if (!(amount > 0)) return toast('Enter the bill amount', 'err');
+  const old = id ? state.cache.bills.find(x => sameId(x.id, id)) : null;
+  const hasFile = !!$('bl-file').files[0];
+  if (amount > photoLimit() && !hasFile && !old?.receipt_url) return toast(`Add a photo of the bill (needed above ${inr(photoLimit())})`, 'err');
+  const btn = $('bl-go'); btn.disabled = true; btn.textContent = 'Saving…';
+  const receipt_url = hasFile ? await upload($('bl-file'), 'receipts') : (old?.receipt_url || null);
+  if (hasFile && !receipt_url) { btn.disabled = false; btn.textContent = id ? 'Resubmit for approval' : 'Submit for approval'; return; }
+  const bill = { store_id: $('bl-store').value, category: state.bill.cat, amount, bill_date: $('bl-date').value, vendor: $('bl-vendor').value.trim(),
+    invoice_no: $('bl-inv').value.trim(), payment_mode: state.bill.pay, notes: $('bl-notes').value.trim(), receipt_url, change_note: $('bl-change')?.value.trim() };
+  const { data, error } = id
+    ? await db.rpc('resubmit_expense', { p_staff_id: String(state.me.id), p_pin: state.pin, p_expense_id: String(id), p_bill: bill })
+    : await db.rpc('submit_expense', { p_staff_id: String(state.me.id), p_pin: state.pin, p_bill: bill });
+  if (error) { btn.disabled = false; btn.textContent = id ? 'Resubmit for approval' : 'Submit for approval'; return toast(error.message, 'err'); }
+  toast(id ? 'Bill resubmitted for approval' : `Bill for ${inr(amount)} sent for approval`, 'ok');
+  if (data?.duplicate_of) setTimeout(() => toast('Heads up: this looks like a repeat of an earlier bill. The approver will see a warning.'), 600);
+  closeModal(); state.bill.tab = 'mine'; RENDER.expense(); refreshBillBadge();
+}
+
+/* ---------- bill details + actions ---------- */
+async function billModal(id) {
+  const e = state.cache.bills.find(x => sameId(x.id, id)); if (!e) return;
+  openModal(`<div class="empty">Loading…</div>`, true);
+  const [{ data: evs }, dup] = await Promise.all([
+    db.from('expense_events').select('*').eq('expense_id', e.id).order('created_at'),
+    e.duplicate_of ? db.from('expenses').select('id, amount, bill_date, created_at, submitted_by, status, invoice_no').eq('id', e.duplicate_of).maybeSingle() : Promise.resolve({ data: null })
+  ]);
+  const st = e.status, c = catInfo(e.category), mine = isMine(e), me = String(state.me.id);
+  const step2 = st === 'rejected' ? ['Rejected', 'bad'] : st === 'sent_back' ? ['Sent back', 'now'] : st === 'cancelled' ? ['Withdrawn', 'bad'] : ['Approved', ['approved', 'paid'].includes(st) ? 'done' : 'now'];
+  const step3 = ['Paid', st === 'paid' ? 'done' : st === 'approved' ? 'now' : ''];
+  const VERB = { submitted: 'submitted the bill', approve: 'approved it', reject: 'rejected it', send_back: 'sent it back', resubmitted: 'fixed and resubmitted it',
+    paid: 'recorded the payment', withdrawn: 'withdrew the bill', admin_override: 'changed the status as admin', imported: 'logged it before approvals started' };
+  let actions = '';
+  if (st === 'submitted' && can('expense_approve') && inScope(e.store_id)) {
+    if (!isAdmin() && mine) actions += `<p class="small muted">You submitted this bill, so someone else has to approve it.</p>`;
+    else { const over = overMyLimit(e);
+      actions += `<div class="fb-card"><h4>Your decision</h4>
+        ${over ? `<p class="small" style="color:var(--red);margin-bottom:8px">This is above your approval limit of ${inr(state.me.approval_limit)}. You can send it back or reject it; an admin or someone with a higher limit has to approve it.</p>` : ''}
+        <input class="input" id="dec-note" placeholder="Note (needed to send back or reject)">
+        <div class="row" style="margin-top:10px"><button class="btn danger" onclick="decideBill('${esc(e.id)}','reject')">Reject</button>
+          <button class="btn ghost" onclick="decideBill('${esc(e.id)}','send_back')">Send back to fix</button><span class="spacer"></span>
+          <button class="btn berry" ${over ? 'disabled' : ''} onclick="decideBill('${esc(e.id)}','approve')">Approve ${inr(e.amount)}</button></div></div>`; }
+  }
+  if (st === 'approved' && can('expense_pay') && inScope(e.store_id)) {
+    if (!isAdmin() && mine) actions += `<p class="small muted">You submitted this bill, so someone else has to pay it.</p>`;
+    else { const m = /^cash/i.test(e.payment_mode || '') ? 'Counter cash (already paid)' : /personal/i.test(e.payment_mode || '') ? 'UPI' : 'Bank transfer';
+      const to = /personal/i.test(e.payment_mode || '') ? e.submitted_by : (e.vendor || '');
+      actions += `<div class="fb-card"><h4>Record the payment</h4>
+        <div class="grid g2" style="gap:10px">
+          <div class="field"><label for="py-method">Paid by</label><select class="input" id="py-method">${PAY_METHODS.map(x => `<option ${x === m ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+          <div class="field"><label for="py-ref">UTR, UPI or cheque number</label><input class="input" id="py-ref" placeholder="Needed for bank, UPI, cheque"></div></div>
+        <div class="grid g2" style="gap:10px">
+          <div class="field"><label for="py-amt">Amount paid</label><input class="input" id="py-amt" type="number" value="${esc(e.amount)}"></div>
+          <div class="field"><label for="py-on">Paid on</label><input class="input" id="py-on" type="date" max="${todayIST()}" value="${todayIST()}"></div></div>
+        <div class="grid g2" style="gap:10px">
+          <div class="field"><label for="py-to">Paid to</label><input class="input" id="py-to" value="${esc(to)}"></div>
+          <div class="field"><label for="py-proof">Payment screenshot</label><input class="input" id="py-proof" type="file" accept="image/*,application/pdf"></div></div>
+        <button class="btn berry block" id="py-go" onclick="payBill('${esc(e.id)}')">Mark as paid</button></div>`; }
+  }
+  if (mine && st === 'sent_back') actions += `<button class="btn berry block" style="margin-bottom:8px" onclick="resubmitBill('${esc(e.id)}')">Fix and resubmit</button>`;
+  if ((mine || isAdmin()) && ['submitted', 'sent_back'].includes(st)) actions += `<button class="btn ghost block" style="margin-bottom:8px" onclick="withdrawBill('${esc(e.id)}')">Withdraw this bill</button>`;
+  if (isAdmin()) actions += `<details style="margin-top:8px"><summary class="small muted" style="cursor:pointer">Admin: change status</summary>
+      <div class="row" style="margin-top:8px"><select class="input" id="ov-status" style="max-width:200px">${Object.entries(BILL_STATUS).map(([k, [l]]) => `<option value="${k}" ${k === st ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <input class="input" id="ov-note" placeholder="Reason (required, saved in history)" style="flex:1"><button class="btn sm" onclick="overrideBill('${esc(e.id)}')">Apply</button></div></details>`;
+
+  openModal(`
+    <div class="row"><span class="bill-ic">${c[1]}</span><div><h2 style="margin:0">${inr(e.amount)}</h2><div class="small muted">${esc(e.vendor || c[2])}${e.invoice_no ? `, invoice ${esc(e.invoice_no)}` : ''}</div></div><span class="spacer"></span>${billPill(st)}</div>
+    <div class="steps"><div class="done"><i></i>Submitted</div><div class="${step2[1]}"><i></i>${step2[0]}</div><div class="${step3[1]}"><i></i>${step3[0]}</div></div>
+    ${dup.data && ['submitted', 'approved', 'sent_back'].includes(st) ? `<div class="cust-hint new" style="margin-bottom:12px">Possible repeat: a bill for ${inr(dup.data.amount)}${dup.data.invoice_no ? ` (invoice ${esc(dup.data.invoice_no)})` : ''} was submitted by ${esc(dup.data.submitted_by)} on ${prettyDate(dup.data.bill_date || ist(dup.data.created_at).date)} and is ${esc((BILL_STATUS[dup.data.status] || [dup.data.status])[0].toLowerCase())}.</div>` : ''}
+    <div class="grid g2" style="gap:14px;margin-bottom:14px">
+      <div>
+        <div class="small muted">For</div><b>${esc(e.stores?.name || '—')}</b>
+        <div class="small muted" style="margin-top:8px">Category</div><b>${esc(c[2])}</b>
+        <div class="small muted" style="margin-top:8px">Bill date</div><b>${e.bill_date ? prettyDate(e.bill_date) : '—'}</b>
+        <div class="small muted" style="margin-top:8px">Paid at the time with</div><b>${esc((PAY_OUT.find(p => p[0] === e.payment_mode) || [, e.payment_mode || '—'])[1])}</b>
+        ${e.notes ? `<div class="small muted" style="margin-top:8px">Note</div><div>${esc(e.notes)}</div>` : ''}
+        ${st === 'paid' && e.paid_method ? `<div class="small muted" style="margin-top:8px">Payment</div><div><b>${esc(e.paid_method)}</b>${e.paid_reference ? `, ref ${esc(e.paid_reference)}` : ''}${e.paid_to ? `, to ${esc(e.paid_to)}` : ''}${e.paid_on ? `, on ${prettyDate(e.paid_on)}` : ''}${e.payment_proof_url ? ` <a href="${esc(e.payment_proof_url)}" target="_blank" rel="noopener">View proof</a>` : ''}</div>` : ''}
+      </div>
+      <div>${e.receipt_url ? `<a href="${esc(e.receipt_url)}" target="_blank" rel="noopener"><img src="${esc(e.receipt_url)}" alt="Bill photo" style="width:100%;max-height:220px;object-fit:contain;border-radius:12px;background:var(--cream)" onerror="this.outerHTML='<span class=&quot;btn ghost&quot;>Open bill file</span>'"></a>` : '<div class="empty" style="background:var(--cream);border-radius:12px"><b>No photo</b>This bill was saved without a photo.</div>'}</div>
+    </div>
+    ${actions}
+    <h3 style="margin:18px 0 10px">History</h3>
+    <div class="timeline">${(evs || []).map(v => `<div class="ev"><b>${esc(v.actor_name || 'Someone')}</b> ${VERB[v.action] || esc(v.action)}
+        <div class="small muted">${fmtDT(v.created_at)}${v.details?.reference ? `, ref ${esc(v.details.reference)}` : ''}${v.details?.old_amount != null && v.details.old_amount !== v.details.new_amount ? `, amount ${inr(v.details.old_amount)} to ${inr(v.details.new_amount)}` : ''}</div>
+        ${v.note ? `<div class="small">"${esc(v.note)}"</div>` : ''}</div>`).join('') || '<div class="muted small">No history yet.</div>'}</div>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`, true);
+}
+async function afterBillAction(msg) { closeModal(); toast(msg, 'ok'); await RENDER.expense(); refreshBillBadge(); }
+async function decideBill(id, decision) {
+  const note = $('dec-note').value.trim();
+  if (decision !== 'approve' && !note) return toast('Add a note so the team knows what to fix', 'err');
+  const { error } = await db.rpc('decide_expense', { p_staff_id: String(state.me.id), p_pin: state.pin, p_expense_id: String(id), p_decision: decision, p_note: note });
+  if (error) return toast(error.message, 'err');
+  afterBillAction({ approve: 'Bill approved. It is now with finance for payment.', reject: 'Bill rejected', send_back: 'Bill sent back to fix' }[decision]);
+}
+async function payBill(id) {
+  const method = $('py-method').value, ref = $('py-ref').value.trim(), amount = parseFloat($('py-amt').value);
+  if (['Bank transfer', 'UPI', 'Cheque'].includes(method) && !ref) return toast('Add the UTR, UPI or cheque number', 'err');
+  $('py-go').disabled = true;
+  const proof = $('py-proof').files[0] ? await upload($('py-proof'), 'receipts') : null;
+  const { error } = await db.rpc('pay_expense', { p_staff_id: String(state.me.id), p_pin: state.pin, p_expense_id: String(id),
+    p_payment: { method, reference: ref, amount, paid_on: $('py-on').value, paid_to: $('py-to').value.trim(), proof_url: proof } });
+  if (error) { $('py-go').disabled = false; return toast(error.message, 'err'); }
+  afterBillAction('Payment recorded. The bill is closed.');
+}
+async function withdrawBill(id) {
+  if (!(await confirmBox('Withdraw this bill?', 'It will be marked as withdrawn and stay in history. You can submit a new one later.', 'Withdraw', true))) return;
+  const { error } = await db.rpc('cancel_expense', { p_staff_id: String(state.me.id), p_pin: state.pin, p_expense_id: String(id), p_note: '' });
+  if (error) return toast(error.message, 'err');
+  afterBillAction('Bill withdrawn');
+}
+async function overrideBill(id) {
+  const note = $('ov-note').value.trim(); if (!note) return toast('Add a reason. It is saved in the history.', 'err');
+  const { error } = await db.rpc('admin_override_expense', { p_admin_id: String(state.me.id), p_admin_pin: state.pin, p_expense_id: String(id), p_status: $('ov-status').value, p_note: note });
+  if (error) return toast(error.message, 'err');
+  afterBillAction('Status changed. The reason is saved in the history.');
+}
+function resubmitBill(id) {
+  const e = state.cache.bills.find(x => sameId(x.id, id));
+  state.bill.cat = e.category; state.bill.pay = e.payment_mode || PAY_OUT[0][0];
+  openModal('<div id="rs-body"></div>', true); drawBillForm($('rs-body'), e);
+}
+function exportBills() {
+  const B = billBuckets(state.cache.bills);
+  exportXLSX((B.everyone || []).map(e => ({ 'Bill date': e.bill_date || ist(e.created_at).date, For: e.stores?.name || '', Category: e.category, Vendor: e.vendor || '', Invoice: e.invoice_no || '',
+    Amount: Number(e.amount), Status: (BILL_STATUS[e.status] || [e.status])[0], 'Submitted by': e.submitted_by || '', 'Decided by': e.decided_by || '', 'Decision note': e.decision_note || '',
+    'Paid by': e.paid_by || '', 'Paid on': e.paid_on || '', Method: e.paid_method || '', Reference: e.paid_reference || '', 'Bill photo': e.receipt_url || '' })), 'bills');
 }
 
 /* =========================================================
@@ -1268,18 +1567,21 @@ RENDER.dashboard = async function () {
 RENDER.accounts = async function () {
   const el = $('v-accounts'), r = range('accounts');
   el.innerHTML = periodBar('accounts') + LOADING;
-  const [orders, exps, inward] = await Promise.all([
+  const [orders, allExps, inward] = await Promise.all([
     fetchAll(() => db.from('orders').select('total_amount, payment_method, created_at').eq('store_id', state.storeId).neq('status', 'void').gte('created_at', dayStart(r.s)).lte('created_at', dayEnd(r.e)).order('created_at'), 'Loading sales'),
     fetchAll(() => db.from('expenses').select('*').eq('store_id', state.storeId).gte('created_at', dayStart(r.s)).lte('created_at', dayEnd(r.e)).order('created_at', { ascending: false }), 'Loading expenses'),
     db.from('grocery_inward').select('cost_price, created_at').eq('store_id', state.storeId).gte('created_at', dayStart(r.s)).lte('created_at', dayEnd(r.e)).then(x => x.error ? [] : (x.data || []))
   ]);
   if (state.view !== 'accounts') return;
-  state.cache.expenses = exps;
+  state.cache.expenses = allExps;
+  // Only approved and paid bills count as spending. Waiting bills are shown separately.
+  const exps = allExps.filter(e => !e.status || ['approved', 'paid'].includes(e.status));
+  const waiting = allExps.filter(e => e.status === 'submitted' || e.status === 'sent_back');
   const inflow = sum(orders, o => o.total_amount), spent = sum(exps, e => e.amount), stock = sum(inward, g => g.cost_price);
   const out = spent + stock, net = inflow - out;
   const cashSales = sum(orders.filter(o => o.payment_method === 'CASH'), o => o.total_amount);
-  const cashOut = sum(exps.filter(e => /^cash/i.test(e.payment_mode || '')), e => e.amount);
-  const owed = sum(exps.filter(e => /personal|reimburs/i.test(e.payment_mode || '')), e => e.amount);
+  const cashOut = sum(allExps.filter(e => /^cash/i.test(e.payment_mode || '') && !['rejected', 'cancelled'].includes(e.status)), e => e.amount);
+  const owed = sum(allExps.filter(e => /personal|reimburs/i.test(e.payment_mode || '') && e.status === 'approved'), e => e.amount);
   const days = dateList(r.s, r.e);
   const inD = countBy(orders, o => ist(o.created_at).date, o => Number(o.total_amount));
   const outD = countBy([...exps.map(e => ({ d: ist(e.created_at).date, v: e.amount })), ...inward.map(g => ({ d: ist(g.created_at).date, v: g.cost_price }))], x => x.d, x => Number(x.v));
@@ -1289,7 +1591,7 @@ RENDER.accounts = async function () {
   el.innerHTML = periodBar('accounts', `<button class="btn ghost sm" onclick="exportExpenses()">Download expenses</button>`) + `
     <div class="grid g4" style="margin-bottom:16px">
       ${kpi('Money in', inr(inflow), `<span class="delta flat">${orders.length} orders</span>`, 'var(--leaf)')}
-      ${kpi('Money out', inr(out), `<span class="delta flat">${exps.length} expenses${stock ? ' + stock' : ''}</span>`, 'var(--red)')}
+      ${kpi('Money out', inr(out), `<span class="delta flat">${exps.length} approved bills${stock ? ' + stock' : ''}${waiting.length ? `, ${inr(sum(waiting, e => e.amount))} waiting` : ''}</span>`, 'var(--red)')}
       ${kpi('Profit', `<span style="color:${net >= 0 ? 'var(--leaf)' : 'var(--red)'}">${net < 0 ? '−' : ''}${inr(Math.abs(net))}</span>`, '<span class="delta flat">Money in minus money out</span>', 'var(--navy)')}
       ${kpi('Margin', inflow ? pct(net, inflow) + '%' : '—', '<span class="delta flat">Profit as a share of sales</span>', 'var(--mango)')}
     </div>
@@ -1301,19 +1603,19 @@ RENDER.accounts = async function () {
         <div class="hbar" style="grid-template-columns:1fr auto"><span>Paid from drawer</span><b>−${inr(cashOut)}</b></div>
         <div style="border-top:1px solid var(--navy-3);margin:10px 0;padding-top:12px"><div class="small" style="color:#9FB3BB">Cash that should be in the drawer</div>
           <div style="font-size:34px;font-weight:800">${inr(cashSales - cashOut)}</div><div class="small" style="color:#9FB3BB">Plus your opening float</div></div>
-        ${owed ? `<div class="pill berry" style="margin-top:8px">${inr(owed)} to pay back to staff</div>` : ''}
+        ${owed ? `<div class="pill berry" style="margin-top:8px">${inr(owed)} approved, to pay back to staff</div>` : ''}
       </div>
     </div>
     <div class="grid g2" style="margin-bottom:16px">
       <div class="panel"><h3>Where the money went</h3><p class="sub">Spending by category.</p>${hbars(topN(byCat, 10).map(([k, v]) => ({ k: catLabel[k] || k, v, c: k.startsWith('Stock') ? 'var(--navy)' : undefined })), inr)}</div>
       <div class="panel"><h3>How sales came in</h3><p class="sub">By payment type.</p>${(() => { const p = countBy(orders, o => o.payment_method, o => Number(o.total_amount)); return stackBar(['UPI', 'CARD', 'CASH'].map(k => ({ k: PAY_NAMES[k], v: p[k] || 0, c: PAY_COLORS[k], label: inr(p[k] || 0) }))); })()}</div>
     </div>
-    <div class="panel"><h3>All expenses</h3><p class="sub">Every expense logged at this store in the period.</p>
-      ${exps.length ? `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Category</th><th>Note</th><th>Paid with</th><th>Logged by</th><th>Bill</th><th style="text-align:right">Amount</th></tr></thead><tbody>
-        ${exps.map(e => `<tr><td>${prettyDate(ist(e.created_at).date)}</td><td><b>${esc(catLabel[e.category] || e.category)}</b></td><td class="small">${esc(e.notes || '—')}</td>
-          <td><span class="pill">${esc((PAY_OUT.find(p => p[0] === e.payment_mode) || [, e.payment_mode])[1])}</span></td><td>${esc(e.submitted_by || '—')}</td>
+    <div class="panel"><h3>All bills</h3><p class="sub">Every bill for this outlet or event in the period. Only approved and paid bills count in the totals above.</p>
+      ${allExps.length ? `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Category</th><th>Vendor or note</th><th>Submitted by</th><th>Status</th><th>Bill</th><th style="text-align:right">Amount</th></tr></thead><tbody>
+        ${allExps.map(e => `<tr style="${['rejected', 'cancelled'].includes(e.status) ? 'opacity:.5' : ''}"><td>${prettyDate(e.bill_date || ist(e.created_at).date)}</td><td><b>${esc(catLabel[e.category] || e.category)}</b></td><td class="small">${esc(e.vendor || e.notes || '—')}</td>
+          <td>${esc(e.submitted_by || '—')}</td><td>${billPill(e.status || 'paid')}</td>
           <td>${e.receipt_url ? `<a class="btn ghost sm" href="${esc(e.receipt_url)}" target="_blank" rel="noopener">View bill</a>` : '<span class="muted small">None</span>'}</td>
-          <td style="text-align:right" class="money">−${inr(e.amount)}</td></tr>`).join('')}</tbody></table></div>` : emptyState('No expenses in this period', 'Staff can log spending from "Log an expense".')}
+          <td style="text-align:right" class="money">−${inr(e.amount)}</td></tr>`).join('')}</tbody></table></div>` : emptyState('No bills in this period', 'The team submits bills from "Bills & expenses".')}
     </div>`;
   const netLine = days.map(d => Math.round((inD[d] || 0) - (outD[d] || 0)));
   mkChart('ch-cash', { type: 'bar', data: { labels: days.map(prettyDate), datasets: [
@@ -1325,7 +1627,7 @@ RENDER.accounts = async function () {
       scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, ticks: { callback: v => (v < 0 ? '−' : '') + inr(Math.abs(v)) }, grid: { color: '#F6ECE2' } } } } });
 };
 function exportExpenses() {
-  exportXLSX(state.cache.expenses.map(e => ({ Date: ist(e.created_at).date, Category: e.category, Amount: Number(e.amount), 'Paid with': e.payment_mode, 'Logged by': e.submitted_by, Note: e.notes || '', Bill: e.receipt_url || '' })), 'expenses');
+  exportXLSX(state.cache.expenses.map(e => ({ Date: e.bill_date || ist(e.created_at).date, Status: (BILL_STATUS[e.status] || [e.status || 'Paid'])[0], Category: e.category, Vendor: e.vendor || '', Amount: Number(e.amount), 'Paid with': e.payment_mode, 'Logged by': e.submitted_by, Note: e.notes || '', Bill: e.receipt_url || '' })), 'expenses');
 }
 
 /* =========================================================
@@ -1757,58 +2059,267 @@ async function saveStore(id) {
 }
 
 /* =========================================================
-   SETUP: STAFF (all changes go through PIN-checked functions)
+   USERS & ACCESS (admin only). Every change is checked and
+   logged inside the database.
    ========================================================= */
+state.users = { q: '', role: 'all', status: 'active', store: '' };
+const permName = Object.fromEntries(PERMS.map(p => [p[0], p[1]]));
+const ago = iso => { if (!iso) return 'Never'; const m = Math.round((Date.now() - Date.parse(iso)) / 60000); if (m < 1) return 'Just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 24) return h + ' hr ago'; const d = Math.round(h / 24); return d === 1 ? 'Yesterday' : d < 30 ? d + ' days ago' : prettyDate(ist(iso).date); };
+const storeName = id => state.stores.find(x => sameId(x.id, id))?.name || 'Removed outlet';
+function storesText(s, max = 3) {
+  if (s.role === 'admin' || s.all_stores) return 'All outlets and events';
+  const ids = (s.store_ids || []).map(String); if (!ids.length) return 'No outlets';
+  const names = ids.map(id => (sameId(id, s.store_id) ? '🏠 ' : '') + storeName(id));
+  return names.slice(0, max).join(', ') + (names.length > max ? ` +${names.length - max} more` : '');
+}
+function userStatus(s) {
+  if (!s.active) return ['Deactivated', ''];
+  if (s.locked) return ['Locked out', 'out'];
+  if (s.must_change_pin) return ['Temporary PIN', 'low'];
+  return ['Active', 'ok'];
+}
+
 RENDER.staff = async function () {
   const el = $('v-staff');
-  el.innerHTML = `<div class="period"><span class="muted">PINs are stored scrambled in the database. Nobody, including admins, can read them.</span><span class="spacer"></span><button class="btn berry" onclick="staffModal()">+ Add staff</button></div><div class="panel" id="staff-body">${emptyState('Loading…', '')}</div>`;
-  const { data, error } = await db.from('staff').select('id, name, role, store_id, active, stores(name)').order('active', { ascending: false }).order('name');
-  if (fail(error, 'Loading staff')) return;
-  state.cache.staff = data || [];
-  $('staff-body').innerHTML = `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Store</th><th>Status</th><th></th></tr></thead><tbody>
-    ${state.cache.staff.map((s, i) => `<tr style="${s.active ? '' : 'opacity:.55'}">
-      <td><div class="row" style="flex-wrap:nowrap"><span class="av" style="width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px;background:${colorFor(s.name)}">${esc(initials(s.name))}</span><b>${esc(s.name)}</b>${sameId(s.id, state.me.id) ? '<span class="pill">You</span>' : ''}</div></td>
-      <td>${s.role === 'admin' ? '<span class="pill berry">Admin</span>' : '<span class="pill">Barista</span>'}</td>
-      <td>${s.stores ? esc(s.stores.name) : '<span class="muted">All outlets</span>'}</td>
-      <td>${s.active ? '<span class="pill ok">Active</span>' : '<span class="pill">Deactivated</span>'}</td>
-      <td><div class="row"><button class="btn ghost sm" onclick="resetPinModal(${i})">Reset PIN</button>
-        ${sameId(s.id, state.me.id) ? '' : `<button class="btn ${s.active ? 'danger' : 'ghost'} sm" onclick="toggleStaff(${i})">${s.active ? 'Deactivate' : 'Reactivate'}</button>`}</div></td></tr>`).join('')}
-  </tbody></table></div>`;
+  if (!el.innerHTML) el.innerHTML = LOADING;
+  const [{ data, error }, { data: audit }] = await Promise.all([
+    db.rpc('list_staff', { p_admin_id: String(state.me.id), p_admin_pin: state.pin }),
+    db.from('audit_log').select('*').order('created_at', { ascending: false }).limit(30)
+  ]);
+  if (state.view !== 'staff') return;
+  if (error) { el.innerHTML = `<div class="panel">${emptyState("Can't load users", error.message)}</div>`; return; }
+  state.cache.staff = data || []; state.cache.audit = audit || [];
+  drawUsers();
 };
-const pinField = (id, label) => `<div class="field"><label for="${id}">${label}</label><input class="input" id="${id}" type="password" inputmode="numeric" maxlength="4" placeholder="4 digits" style="letter-spacing:6px;font-size:20px"></div>`;
-function staffModal() {
-  openModal(`<h2>Add staff</h2><p class="sub">They'll sign in by tapping their name and entering this PIN.</p>
-    <div class="field"><label for="st-name">Full name</label><input class="input" id="st-name"></div>
-    <div class="grid g2" style="gap:10px"><div class="field"><label for="st-role">Role</label><select class="input" id="st-role"><option value="barista">Barista (counter only)</option><option value="admin">Admin (everything)</option></select></div>
-      <div class="field"><label for="st-store">Store</label><select class="input" id="st-store">${storeOptions(null, { allOption: 'All outlets and events' })}</select></div></div>
-    ${pinField('st-pin', 'PIN')}
-    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" onclick="saveStaff()">Add staff</button></div>`);
+function drawUsers() {
+  const el = $('v-staff'), all = state.cache.staff, f = state.users;
+  const active = all.filter(s => s.active);
+  const roleOf = s => s.role === 'admin' ? 'admin' : accessLabel(s);
+  const list = all.filter(s =>
+    (f.status === 'all' || (f.status === 'active' ? s.active : f.status === 'locked' ? s.locked : f.status === 'pin' ? s.active && s.must_change_pin : !s.active)) &&
+    (f.role === 'all' || roleOf(s) === f.role) &&
+    (!f.store || s.role === 'admin' || s.all_stores || (s.store_ids || []).map(String).includes(f.store)) &&
+    (!f.q || s.name.toLowerCase().includes(f.q.toLowerCase()) || String(s.phone || '').includes(f.q)));
+  const ACT = { access_changed: 'changed access for', staff_created: 'added', staff_deactivated: 'deactivated', staff_reactivated: 'reactivated', bill_override: 'overrode a bill status',
+    pin_reset: 'reset the PIN for', pin_changed: 'changed their own PIN', staff_unlocked: 'unlocked', profile_changed: 'edited the profile of' };
+  const nameOf = id => all.find(s => sameId(s.id, id))?.name || '';
+  el.innerHTML = `
+    <div class="grid g4" style="margin-bottom:16px">
+      ${kpi('Active users', active.length, `<span class="delta flat">${active.filter(s => s.role === 'admin').length} admin${active.filter(s => s.role === 'admin').length === 1 ? '' : 's'}</span>`, 'var(--leaf)')}
+      ${kpi('Locked out', all.filter(s => s.locked).length, '<span class="delta flat">5 wrong PINs locks for 15 minutes</span>', 'var(--red)')}
+      ${kpi('Temporary PIN', active.filter(s => s.must_change_pin).length, '<span class="delta flat">Will pick their own at next sign-in</span>', 'var(--mango)')}
+      ${kpi('Deactivated', all.filter(s => !s.active).length, '<span class="delta flat">Kept for history, cannot sign in</span>', 'var(--navy-3)')}
+    </div>
+    <div class="panel">
+      <div class="row" style="margin-bottom:12px">
+        <input class="input" style="max-width:240px" placeholder="Search name or phone" value="${esc(f.q)}" oninput="state.users.q=this.value;clearTimeout(window._uq);window._uq=setTimeout(drawUsers,250)">
+        <select class="input" style="max-width:200px" onchange="state.users.store=this.value;drawUsers()">${storeOptions(f.store, { allOption: 'Any outlet' })}</select>
+        <div class="seg" style="flex:0 1 auto">${[['active', 'Active'], ['locked', 'Locked'], ['pin', 'Temp PIN'], ['inactive', 'Deactivated'], ['all', 'All']].map(([k, l]) => `<button class="${f.status === k ? 'on' : ''}" onclick="state.users.status='${k}';drawUsers()">${l}</button>`).join('')}</div>
+        <span class="spacer"></span><button class="btn ghost sm" onclick="exportUsers()">Download</button><button class="btn berry" onclick="userModal()">+ Add user</button>
+      </div>
+      <div class="chips" style="margin-bottom:8px">${[['all', 'Everyone'], ['admin', 'Admins'], ['Barista', 'Baristas'], ['Store manager', 'Store managers'], ['Finance', 'Finance'], ['Approver', 'Approvers'], ['Custom access', 'Custom']].map(([k, l]) => `<button class="chip ${f.role === k ? 'on' : ''}" onclick="state.users.role='${esc(k)}';drawUsers()">${l}</button>`).join('')}</div>
+      ${list.length ? `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Access</th><th>Outlets</th><th>Last sign-in</th><th>Status</th><th></th></tr></thead><tbody>
+      ${list.map(s => { const i = all.indexOf(s), [st, cls] = userStatus(s); return `<tr style="${s.active ? '' : 'opacity:.55'}">
+        <td><div class="row" style="flex-wrap:nowrap"><span style="width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px;flex-shrink:0;background:${colorFor(s.name)}">${esc(initials(s.name))}</span>
+          <div><b>${esc(s.name)}</b>${sameId(s.id, state.me.id) ? ' <span class="pill">You</span>' : ''}<br><span class="small muted">${esc(s.phone || 'No phone')}</span></div></div></td>
+        <td><span class="pill ${s.role === 'admin' ? 'berry' : accessLabel(s) === 'Finance' ? 'navy' : ''}">${accessLabel(s)}</span>
+          <div class="small muted">${s.role === 'admin' ? 'Everything' : `${(s.permissions || []).length} permission${(s.permissions || []).length === 1 ? '' : 's'}${(s.permissions || []).includes('expense_approve') ? `, approves up to ${s.approval_limit != null ? inr(s.approval_limit) : 'any amount'}` : ''}`}</div></td>
+        <td class="small" style="max-width:260px">${esc(storesText(s))}</td>
+        <td class="small">${ago(s.last_login_at)}</td>
+        <td><span class="pill ${cls}">${st}</span></td>
+        <td><button class="btn ghost sm" onclick="userModal(${i})">Manage</button></td></tr>`; }).join('')}
+      </tbody></table></div>` : emptyState('No users match', 'Try another filter, or add a user.')}
+    </div>
+    <div class="panel" style="margin-top:16px"><h3>Change history</h3><p class="sub">Every access change, PIN reset and admin override, newest first.</p>
+      ${state.cache.audit.length ? `<div class="timeline">${state.cache.audit.map(a => `<div class="ev"><b>${esc(a.actor_name || 'Admin')}</b> ${ACT[a.action] || esc(a.action)} ${a.target_type === 'staff' && a.action !== 'pin_changed' ? `<b>${esc(a.details?.name || nameOf(a.target_id))}</b>` : ''}
+        <div class="small muted">${fmtDT(a.created_at)}${a.action === 'access_changed' && a.details?.after ? `, now ${esc(accessLabel(a.details.after))}, ${esc(storesText(a.details.after, 2))}` : ''}${a.details?.note ? `, "${esc(a.details.note)}"` : ''}</div></div>`).join('')}</div>` : emptyState('No changes yet', '')}
+    </div>`;
 }
-async function saveStaff() {
-  const name = $('st-name').value.trim(), pin = $('st-pin').value.trim();
-  if (!name) return toast('Add a name', 'err'); if (!/^\d{4}$/.test(pin)) return toast('PIN must be 4 digits', 'err');
-  const { error } = await db.rpc('create_staff', { p_admin_id: String(state.me.id), p_admin_pin: state.pin, p_name: name, p_role: $('st-role').value, p_store_id: $('st-store').value || null, p_pin: pin });
-  if (fail(error, 'Adding staff')) return;
-  closeModal(); toast(`${name} added`, 'ok'); RENDER.staff();
+function exportUsers() {
+  exportXLSX(state.cache.staff.map(s => ({ Name: s.name, Phone: s.phone || '', Access: accessLabel(s), Permissions: s.role === 'admin' ? 'Everything' : (s.permissions || []).map(p => permName[p] || p).join(', '),
+    'Approval limit': s.approval_limit ?? '', Outlets: storesText(s, 99).replace('🏠 ', ''), 'Home outlet': s.store_id ? storeName(s.store_id) : '', Status: userStatus(s)[0],
+    'Last sign-in': s.last_login_at ? fmtDT(s.last_login_at) : 'Never', Notes: s.notes || '' })), 'users');
 }
-function resetPinModal(i) {
+
+/* ---------- add / manage a user ---------- */
+function accessSection(s) {
+  const groups = [...new Set(PERMS.map(p => p[2]))];
+  return `<div class="field"><label>Role</label><div class="seg" id="ac-role">
+      <button class="${s.role !== 'admin' ? 'on' : ''}" data-r="barista" onclick="setAccessRole('barista')">Team member</button>
+      <button class="${s.role === 'admin' ? 'on' : ''}" data-r="admin" onclick="setAccessRole('admin')">Admin (full access, all outlets)</button></div></div>
+    <div id="ac-perms-wrap" class="${s.role === 'admin' ? 'hidden' : ''}">
+      <div class="field"><label>Start from</label><div class="quick">${Object.keys(ACCESS_PRESETS).map(k => `<button type="button" onclick="applyAccessPreset('${k}')">${k}</button>`).join('')}</div></div>
+      ${groups.map(g => `<div class="fb-q">${g}</div><div class="perm-grid">${PERMS.filter(p => p[2] === g).map(([k, l]) => `<label><input type="checkbox" class="ac-perm" value="${k}" ${(s.permissions || []).includes(k) ? 'checked' : ''} onchange="syncLimitField()"> ${l}</label>`).join('')}</div>`).join('')}
+      <div class="field" id="ac-limit-wrap" style="margin-top:12px"><label for="ac-limit">Can approve bills up to (₹)</label><input class="input" id="ac-limit" type="number" placeholder="Leave empty for no limit" value="${s.approval_limit ?? ''}"></div>
+      <h3 style="margin:16px 0 8px">Outlets</h3>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:600;margin-bottom:6px"><input type="checkbox" id="um-all" style="width:18px;height:18px;accent-color:var(--berry)" ${s.all_stores ? 'checked' : ''} onchange="syncHome()"> All outlets and events, including new ones</label>
+      <div id="um-store-list">
+        <div class="fb-q">Outlets</div><div class="perm-grid">${state.stores.filter(x => !isEvent(x)).map(x => storeBox(x, s)).join('')}</div>
+        ${state.stores.some(isEvent) ? `<div class="fb-q">Events</div><div class="perm-grid">${state.stores.filter(isEvent).map(x => storeBox(x, s)).join('')}</div>` : ''}
+        <p class="small muted">An outlet also covers the events it runs, so you only need to tick events run by other outlets.</p>
+        <div class="field" style="margin-top:6px"><label for="um-home">Home outlet (where they start after signing in)</label><select class="input" id="um-home" data-cur="${esc(s.store_id || '')}"></select></div>
+      </div>
+    </div>`;
+}
+const storeBox = (x, s) => `<label><input type="checkbox" class="um-store" value="${esc(x.id)}" ${(s.store_ids || []).map(String).includes(String(x.id)) ? 'checked' : ''} onchange="syncHome()"> ${esc(x.name)}${isEvent(x) ? ` <span class="small muted">(${eventState(x)[1]})</span>` : ''}</label>`;
+function setAccessRole(r) { document.querySelectorAll('#ac-role button').forEach(b => b.classList.toggle('on', b.dataset.r === r)); $('ac-perms-wrap').classList.toggle('hidden', r === 'admin'); }
+function applyAccessPreset(k) { const p = ACCESS_PRESETS[k]; document.querySelectorAll('.ac-perm').forEach(c => c.checked = p.perms.includes(c.value)); $('ac-limit').value = p.limit ?? ''; syncLimitField(); }
+function syncLimitField() { const on = [...document.querySelectorAll('.ac-perm')].some(c => c.checked && c.value === 'expense_approve'); $('ac-limit-wrap').style.display = on ? '' : 'none'; }
+function syncHome() {
+  const all = $('um-all').checked, sel = $('um-home');
+  document.querySelectorAll('.um-store').forEach(c => c.disabled = all); $('um-store-list').style.opacity = all ? .45 : 1;
+  const cur = sel.value || sel.dataset.cur, picked = [...document.querySelectorAll('.um-store:checked')].map(c => c.value);
+  sel.innerHTML = all ? '<option value="">Not needed for all outlets</option>' : picked.map(id => `<option value="${esc(id)}" ${sameId(id, cur) ? 'selected' : ''}>${esc(storeName(id))}</option>`).join('') || '<option value="">Tick at least one outlet</option>';
+  sel.disabled = all;
+}
+function readAccess() {
+  const role = document.querySelector('#ac-role button.on').dataset.r;
+  const perms = role === 'admin' ? [] : [...document.querySelectorAll('.ac-perm:checked')].map(c => c.value);
+  const lim = role === 'admin' || $('ac-limit').value === '' || !perms.includes('expense_approve') ? null : parseFloat($('ac-limit').value);
+  const all = role === 'admin' || $('um-all').checked;
+  const ids = all ? [] : [...document.querySelectorAll('.um-store:checked')].map(c => c.value);
+  if (role !== 'admin' && !perms.length) throw new Error('Tick at least one thing they can do');
+  if (!all && !ids.length) throw new Error('Pick at least one outlet, or choose all outlets');
+  return { role, perms, lim, all, ids, home: all ? null : ($('um-home').value || ids[0]) };
+}
+function userModal(i) {
+  const isNew = i == null;
+  const s = isNew ? { role: 'barista', permissions: ACCESS_PRESETS['Barista'].perms, approval_limit: null, all_stores: false, store_ids: inScope(state.storeId) ? [state.storeId] : [], store_id: state.storeId, active: true } : state.cache.staff[i];
+  if (isNew) {
+    openModal(`<h2>Add a user</h2><p class="sub">They sign in by tapping their name and entering their PIN.</p>
+      <div class="grid g2" style="gap:10px"><div class="field"><label for="um-name">Full name</label><input class="input" id="um-name" placeholder="Priya Reddy"></div>
+        <div class="field"><label for="um-phone">Phone</label><input class="input" id="um-phone" inputmode="numeric" placeholder="10 digits (optional)"></div></div>
+      <div class="grid g2" style="gap:10px">${pinField('um-pin', 'Starting PIN')}
+        <div class="field"><label>&nbsp;</label><label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="um-mustchange" checked style="width:18px;height:18px;accent-color:var(--berry)"> Ask them to pick their own PIN the first time they sign in</label></div></div>
+      <h3 style="margin:10px 0 8px">Access</h3>${accessSection(s)}
+      <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" id="um-save" onclick="createUser()">Add user</button></div>`, true);
+  } else {
+    const [st, cls] = userStatus(s);
+    openModal(`<div class="row"><span style="width:48px;height:48px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;background:${colorFor(s.name)}">${esc(initials(s.name))}</span>
+        <div><h2 style="margin:0">${esc(s.name)}</h2><div class="small muted">${accessLabel(s)}, ${esc(storesText(s, 2))}</div></div><span class="spacer"></span><span class="pill ${cls}">${st}</span></div>
+      <div class="seg" style="margin:16px 0" id="um-tabs">${[['profile', 'Profile'], ['access', 'Access & outlets'], ['security', 'PIN & sign-ins'], ['activity', 'Activity']].map(([k, l], n) => `<button class="${n === 0 ? 'on' : ''}" data-t="${k}" onclick="userTab('${k}',${i})">${l}</button>`).join('')}</div>
+      <div class="um-sec" data-t="profile">
+        <div class="grid g2" style="gap:10px"><div class="field"><label for="um-name">Full name</label><input class="input" id="um-name" value="${esc(s.name)}"></div>
+          <div class="field"><label for="um-phone">Phone</label><input class="input" id="um-phone" inputmode="numeric" value="${esc(s.phone || '')}" placeholder="10 digits"></div></div>
+        <div class="field"><label for="um-notes">Notes (only admins see these)</label><input class="input" id="um-notes" value="${esc(s.notes || '')}" placeholder="Weekend shifts, joined in June"></div>
+        <div class="small muted" style="margin-bottom:12px">Added ${s.created_at ? prettyDate(ist(s.created_at).date) : '—'}. Last signed in: ${ago(s.last_login_at)}.</div>
+        <div class="row"><span class="spacer"></span><button class="btn berry" onclick="saveProfile(${i})">Save profile</button></div>
+      </div>
+      <div class="um-sec hidden" data-t="access">${accessSection(s)}<div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn berry" id="um-save" onclick="saveUserAccess(${i})">Save access</button></div></div>
+      <div class="um-sec hidden" data-t="security">
+        ${s.locked ? `<div class="cust-hint new" style="margin-bottom:12px">Locked after too many wrong PINs, until ${fmtDT(s.locked_until)}. <button class="btn sm" style="margin-left:8px" onclick="unlockUser(${i})">Unlock now</button></div>` : ''}
+        ${s.must_change_pin ? '<div class="cust-hint" style="margin-bottom:12px;background:#FFF3DC;color:#9A5B00">Using a temporary PIN. They will be asked to choose their own at next sign-in.</div>' : ''}
+        <div class="fb-card"><h4>Give a new PIN</h4><div class="grid g2" style="gap:10px">${pinField('rp-pin', 'New PIN')}
+          <div class="field"><label>&nbsp;</label><label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="rp-must" ${sameId(s.id, state.me.id) ? '' : 'checked'} style="width:18px;height:18px;accent-color:var(--berry)"> Make them pick their own at next sign-in</label></div></div>
+          <button class="btn" onclick="saveResetPin(${i})">Save new PIN</button></div>
+        <div class="row" style="margin:6px 0 14px">${sameId(s.id, state.me.id) ? '<span class="small muted">You can\u2019t deactivate yourself.</span>' : `<button class="btn ${s.active ? 'danger' : 'ghost'}" onclick="toggleStaff(${i})">${s.active ? 'Deactivate user' : 'Reactivate user'}</button><span class="small muted">${s.active ? 'They can\u2019t sign in; their sales and bills stay in history.' : ''}</span>`}</div>
+        <h3 style="margin-bottom:8px">Recent sign-ins</h3><div id="um-logins">${emptyState('Loading…', '')}</div>
+      </div>
+      <div class="um-sec hidden" data-t="activity"><div id="um-activity">${emptyState('Loading…', '')}</div></div>
+      <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`, true);
+  }
+  syncLimitField(); syncHome();
+}
+async function userTab(t, i) {
+  document.querySelectorAll('#um-tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  document.querySelectorAll('.um-sec').forEach(x => x.classList.toggle('hidden', x.dataset.t !== t));
   const s = state.cache.staff[i];
-  openModal(`<h2>New PIN for ${esc(s.name)}</h2><p class="sub">Tell them the new PIN in person.</p>${pinField('rp-pin', 'New PIN')}
-    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" onclick="saveResetPin(${i})">Save PIN</button></div>`);
+  if (t === 'security') {
+    const { data } = await db.rpc('staff_login_history', { p_admin_id: String(state.me.id), p_admin_pin: state.pin, p_staff_id: String(s.id) });
+    const l = data || [];
+    $('um-logins').innerHTML = l.length ? `<div class="table-wrap"><table><tbody>${l.map(x => `<tr><td>${fmtDT(x.at)}</td><td>${x.success ? '<span class="pill ok">Signed in</span>' : '<span class="pill out">Wrong PIN</span>'}</td></tr>`).join('')}</tbody></table></div>` : emptyState('No sign-ins yet', '');
+  }
+  if (t === 'activity') {
+    const since = new Date(Date.now() - 30 * 864e5).toISOString();
+    const [orders, { data: evs }, { data: changes }] = await Promise.all([
+      fetchAll(() => db.from('orders').select('total_amount, status').eq('barista_id', s.id).gte('created_at', since)),
+      db.from('expense_events').select('*, expenses(amount, vendor, category)').eq('actor_id', s.id).order('created_at', { ascending: false }).limit(25),
+      db.from('audit_log').select('*').eq('target_id', String(s.id)).order('created_at', { ascending: false }).limit(15)
+    ]);
+    const live = orders.filter(o => o.status !== 'void');
+    const VERB = { submitted: 'Submitted a bill', approve: 'Approved a bill', reject: 'Rejected a bill', send_back: 'Sent back a bill', resubmitted: 'Resubmitted a bill', paid: 'Paid a bill', withdrawn: 'Withdrew a bill', admin_override: 'Overrode a bill status', imported: 'Bill logged before approvals' };
+    const AV = { access_changed: 'Access changed', staff_created: 'Account created', staff_deactivated: 'Deactivated', staff_reactivated: 'Reactivated', pin_reset: 'PIN reset by admin', pin_changed: 'Changed own PIN', staff_unlocked: 'Unlocked', profile_changed: 'Profile edited' };
+    $('um-activity').innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:16px">${miniStat('Orders, last 30 days', live.length)}${miniStat('Sales handled', inr(sum(live, o => o.total_amount)))}${miniStat('Bill actions', (evs || []).length)}</div>
+      <div class="grid g2" style="gap:16px;align-items:start">
+        <div><h3 style="margin-bottom:8px">Bills</h3>${(evs || []).length ? `<div class="timeline">${evs.map(v => `<div class="ev"><b>${VERB[v.action] || esc(v.action)}</b>${v.expenses ? `, ${inr(v.expenses.amount)} ${esc(v.expenses.vendor || '')}` : ''}<div class="small muted">${fmtDT(v.created_at)}</div>${v.note ? `<div class="small">"${esc(v.note)}"</div>` : ''}</div>`).join('')}</div>` : emptyState('No bill activity', '')}</div>
+        <div><h3 style="margin-bottom:8px">Account changes</h3>${(changes || []).length ? `<div class="timeline">${changes.map(a => `<div class="ev"><b>${AV[a.action] || esc(a.action)}</b><div class="small muted">${fmtDT(a.created_at)} by ${esc(a.actor_name || '')}</div></div>`).join('')}</div>` : emptyState('No changes', '')}</div>
+      </div>`;
+  }
+}
+const adminArgs = () => ({ p_admin_id: String(state.me.id), p_admin_pin: state.pin });
+async function afterUserChange(msg, reopen) {
+  toast(msg, 'ok'); await RENDER.staff(); loadLoginStaff();
+  if (reopen != null) { const i = state.cache.staff.findIndex(x => sameId(x.id, reopen)); if (i > -1) userModal(i); } else closeModal();
+}
+async function createUser() {
+  const name = $('um-name').value.trim(), pin = $('um-pin').value.trim();
+  if (!name) return toast('Add a name', 'err');
+  if (!/^\d{4}$/.test(pin)) return toast('PIN must be 4 digits', 'err');
+  let a; try { a = readAccess(); } catch (e) { return toast(e.message, 'err'); }
+  $('um-save').disabled = true;
+  const { error } = await db.rpc('create_staff', { ...adminArgs(), p_name: name, p_role: a.role, p_pin: pin, p_permissions: a.perms, p_approval_limit: a.lim,
+    p_store_ids: a.ids, p_all_stores: a.all, p_home_store_id: a.home, p_phone: $('um-phone').value.trim(), p_must_change_pin: $('um-mustchange').checked });
+  if (error) { $('um-save').disabled = false; return toast(error.message, 'err'); }
+  closeModal(); afterUserChange(`${name} added`);
+}
+async function saveProfile(i) {
+  const s = state.cache.staff[i];
+  const { error } = await db.rpc('update_staff_profile', { ...adminArgs(), p_staff_id: String(s.id), p_name: $('um-name').value.trim(), p_phone: $('um-phone').value.trim(), p_notes: $('um-notes').value.trim() });
+  if (error) return toast(error.message, 'err');
+  if (sameId(s.id, state.me.id)) { state.me.name = $('um-name').value.trim(); $('me-name').textContent = state.me.name; }
+  afterUserChange('Profile saved', s.id);
+}
+async function saveUserAccess(i) {
+  const s = state.cache.staff[i]; let a; try { a = readAccess(); } catch (e) { return toast(e.message, 'err'); }
+  $('um-save').disabled = true;
+  const { error } = await db.rpc('set_staff_access', { ...adminArgs(), p_staff_id: String(s.id), p_role: a.role, p_permissions: a.perms, p_approval_limit: a.lim, p_store_ids: a.ids, p_all_stores: a.all, p_home_store_id: a.home });
+  if (error) { $('um-save').disabled = false; return toast(error.message, 'err'); }
+  afterUserChange(`Access saved for ${s.name}. It applies the next time they sign in.`, s.id);
 }
 async function saveResetPin(i) {
   const s = state.cache.staff[i], pin = $('rp-pin').value.trim();
   if (!/^\d{4}$/.test(pin)) return toast('PIN must be 4 digits', 'err');
-  const { error } = await db.rpc('reset_staff_pin', { p_admin_id: String(state.me.id), p_admin_pin: state.pin, p_staff_id: String(s.id), p_pin: pin });
-  if (fail(error, 'Resetting PIN')) return;
-  if (sameId(s.id, state.me.id)) state.pin = pin;
-  closeModal(); toast(`PIN updated for ${s.name}`, 'ok');
+  const { error } = await db.rpc('reset_staff_pin', { ...adminArgs(), p_staff_id: String(s.id), p_pin: pin, p_must_change: $('rp-must').checked });
+  if (error) return toast(error.message, 'err');
+  if (sameId(s.id, state.me.id) && !state.demo) state.pin = pin;
+  afterUserChange(`New PIN saved for ${s.name}. Tell them in person.`, s.id);
+}
+async function unlockUser(i) {
+  const s = state.cache.staff[i];
+  const { error } = await db.rpc('unlock_staff', { ...adminArgs(), p_staff_id: String(s.id) });
+  if (error) return toast(error.message, 'err'); afterUserChange(`${s.name} unlocked`, s.id);
 }
 async function toggleStaff(i) {
   const s = state.cache.staff[i];
-  if (s.active && !(await confirmBox(`Deactivate ${s.name}?`, 'They will no longer be able to sign in. You can reactivate them later.', 'Deactivate', true))) return;
-  const { error } = await db.rpc('set_staff_active', { p_admin_id: String(state.me.id), p_admin_pin: state.pin, p_staff_id: String(s.id), p_active: !s.active });
-  if (fail(error, 'Updating staff')) return; RENDER.staff();
+  if (s.active && !(await confirmBox(`Deactivate ${s.name}?`, 'They will no longer be able to sign in. Their sales, bills and history stay. You can reactivate them later.', 'Deactivate', true))) return;
+  const { error } = await db.rpc('set_staff_active', { ...adminArgs(), p_staff_id: String(s.id), p_active: !s.active });
+  if (error) return toast(error.message, 'err'); afterUserChange(s.active ? `${s.name} deactivated` : `${s.name} reactivated`, s.id);
+}
+const pinField = (id, label) => `<div class="field"><label for="${id}">${label}</label><input class="input" id="${id}" type="password" inputmode="numeric" maxlength="4" placeholder="4 digits" style="letter-spacing:6px;font-size:20px"></div>`;
+
+/* ---------- my account (everyone) ---------- */
+function myAccountModal(force = false) {
+  const me = state.me;
+  openModal(`<h2>${force ? 'Choose your own PIN' : 'My account'}</h2>
+    <p class="sub">${force ? 'You signed in with a temporary PIN. Pick a new one that only you know.' : `${esc(me.name)}, ${accessLabel(me)}`}</p>
+    ${force ? '' : `<div class="fb-card"><div class="small muted">Your outlets</div><b>${esc(storesText({ ...me, store_ids: me.store_ids || [] }, 99))}</b>
+      <div class="small muted" style="margin-top:10px">What you can do</div><div class="small">${isAdmin() ? 'Everything (admin)' : (me.permissions || []).map(p => esc(permName[p] || p)).join(', ')}</div>
+      ${can('expense_approve') && !isAdmin() ? `<div class="small muted" style="margin-top:10px">You can approve bills up to</div><b>${me.approval_limit != null ? inr(me.approval_limit) : 'any amount'}</b>` : ''}</div>
+      <h3 style="margin:16px 0 8px">Change your PIN</h3>`}
+    <div class="grid g2" style="gap:10px">${pinField('mp-new', 'New PIN')}${pinField('mp-new2', 'Type it again')}</div>
+    <p class="small muted">Easy PINs like 1234 or 1111 aren't allowed.</p>
+    <div class="modal-actions">${force ? '<button class="btn ghost" onclick="logout()">Sign out</button>' : '<button class="btn ghost" onclick="closeModal()">Close</button>'}<button class="btn berry" id="mp-go" onclick="saveMyPin(${force})">Save new PIN</button></div>`);
+  if (force) { const bd = document.querySelector('#modal-root .backdrop'); bd.removeAttribute('onclick'); bd.onclick = null; }
+}
+async function saveMyPin(force) {
+  const a = $('mp-new').value.trim(), b = $('mp-new2').value.trim();
+  if (!/^\d{4}$/.test(a)) return toast('PIN must be 4 digits', 'err');
+  if (a !== b) return toast("The two PINs don't match", 'err');
+  $('mp-go').disabled = true;
+  const { error } = await db.rpc('change_my_pin', { p_staff_id: String(state.me.id), p_old_pin: state.pin, p_new_pin: a });
+  if (error) { $('mp-go').disabled = false; return toast(error.message, 'err'); }
+  if (!state.demo) state.pin = a;
+  state.me.must_change_pin = false; closeModal(); toast('Your new PIN is saved', 'ok');
 }
 
 /* =========================================================
@@ -1891,8 +2402,27 @@ function makeDemoClient() {
     { id: 'u4', name: 'Imran Khan', role: 'barista', store_id: 's2', active: true },
     { id: 'u5', name: 'Neha Varma', role: 'barista', store_id: 's2', active: true },
     { id: 'u6', name: 'Kiran Goud', role: 'barista', store_id: 's1', active: false },
-    { id: 'u7', name: 'Event Crew Deepa', role: 'barista', store_id: 'e2', active: true }
+    { id: 'u7', name: 'Event Crew Deepa', role: 'barista', store_id: 'e2', active: true },
+    { id: 'u8', name: 'Manoj Kumar', role: 'barista', store_id: 's1', active: true, permissions: ['pos', 'sales_view', 'void_bills', 'expense_submit', 'expense_approve', 'reports', 'menu', 'stock'], approval_limit: 5000 },
+    { id: 'u9', name: 'Ananya Rao', role: 'barista', store_id: null, active: true, permissions: ['expense_submit', 'expense_view_all', 'expense_approve', 'expense_pay', 'reports'], approval_limit: null }
   ];
+  T.staff.forEach(s => { if (!s.permissions) s.permissions = s.role === 'admin' ? [] : ['pos', 'sales_view', 'expense_submit']; if (s.approval_limit === undefined) s.approval_limit = null; });
+  // Users: outlets, phones, sign-ins. Priya works at two outlets, Ananya at all of them.
+  T.staff_stores = []; T.staff_logins = [];
+  {
+    const assign = { u2: ['s1'], u3: ['s1', 's2'], u4: ['s2'], u5: ['s2'], u6: ['s1'], u7: ['e2'], u8: ['s1'] };
+    const phones = ['9848012345', '9849023456', '9701034567', '9866045678', '9912056789', '9440067890', '9959078901', '9885089012', '9030090123'];
+    T.staff.forEach((s, k) => {
+      s.all_stores = s.role === 'admin' || s.id === 'u9';
+      (assign[s.id] || []).forEach(id => T.staff_stores.push({ staff_id: s.id, store_id: id }));
+      s.store_id = s.all_stores ? null : (assign[s.id] || [])[0] || null;
+      Object.assign(s, { phone: phones[k] || null, notes: null, must_change_pin: s.id === 'u4', failed_pin_attempts: 0,
+        locked_until: s.id === 'u5' ? new Date(Date.now() + 12 * 60000).toISOString() : null,
+        last_login_at: s.active ? new Date(Date.now() - R(1, 72) * 36e5).toISOString() : null, created_at: '2026-04-01T09:00:00Z' });
+      for (let j = 0; j < 8 && s.active; j++) T.staff_logins.push({ staff_id: s.id, success: rand() > .12, created_at: new Date(Date.now() - (j * 20 + R(1, 15)) * 36e5).toISOString() });
+    });
+  }
+
   const INV = [['Alphonso mango pulp','g',9000,4000,0.32],['Kokum syrup','ml',1400,2000,0.4],['Mixed berries','g',3500,2500,0.9],['Spinach & kale','g',600,1500,0.25],
     ['Watermelon','g',22000,8000,0.03],['Beetroot','g',5200,3000,0.06],['Valencia oranges','g',15000,8000,0.08],['Pineapple','g',8000,5000,0.07],
     ['Ginger','g',900,500,0.2],['Cups 400 ml','pcs',140,300,4],['Chia seeds','g',1800,800,0.5],['Whey protein','g',2600,1500,2.2],['Honey','ml',1200,600,0.6]];
@@ -1969,6 +2499,36 @@ function makeDemoClient() {
       }
     }
   });
+  // Bill approvals in the sample data: older bills are paid; recent ones sit at different steps.
+  T.expense_events = []; T.audit_log = [];
+  {
+    const VENDORS = { 'Produce & Fruits': 'Bowenpally mandi', 'Dairy, Ice & Boosters': 'Heritage Dairy', 'Packaging & Straws': 'Hyderabad Packaging Co', 'Store Utilities & Logistics': 'Rapido', 'Repairs & Kitchen Maintenance': 'Vitamix Service Centre' };
+    const who = n => T.staff.find(x => x.name === n);
+    const fin = who('Ananya Rao'), mgr = who('Manoj Kumar');
+    const ev = (e, action, from, to, actor, note, at, details) => T.expense_events.push({ id: nid('ev'), expense_id: e.id, action, from_status: from, to_status: to, actor_id: actor.id, actor_name: actor.name, note: note || null, details: details || {}, created_at: at });
+    T.expenses.forEach((e, k) => {
+      const sub = who(e.submitted_by) || T.staff[1];
+      Object.assign(e, { submitted_by_id: sub.id, vendor: VENDORS[e.category] || null, bill_date: ist(e.created_at).date, invoice_no: rand() < .6 ? 'INV-' + (4000 + k) : null });
+      const t0 = Date.parse(e.created_at), at = hrs => new Date(Math.min(Date.now() - 60000, t0 + hrs * 36e5)).toISOString();
+      ev(e, 'submitted', null, 'submitted', sub, null, e.created_at, { amount: e.amount });
+      const age = (Date.now() - t0) / 864e5;
+      const status = age > 4 ? 'paid' : pickW(['submitted', 'approved', 'sent_back', 'rejected', 'paid'], [5, 4, 1, 1, 3]);
+      const approver = (e.amount <= 5000 && sub.store_id === mgr.store_id && sub.id !== mgr.id) ? mgr : fin;
+      if (status === 'submitted') { e.status = 'submitted'; return; }
+      if (status === 'sent_back' || status === 'rejected') {
+        const note = status === 'sent_back' ? 'The photo is blurry. Please retake it.' : 'Not a store expense.';
+        Object.assign(e, { status, decided_by: approver.name, decided_by_id: approver.id, decided_at: at(3), decision_note: note });
+        ev(e, status === 'sent_back' ? 'send_back' : 'reject', 'submitted', status, approver, note, at(3)); return;
+      }
+      Object.assign(e, { status: 'approved', decided_by: approver.name, decided_by_id: approver.id, decided_at: at(4) });
+      ev(e, 'approve', 'submitted', 'approved', approver, null, at(4), { amount: e.amount });
+      if (status === 'paid') {
+        const m = /^Cash/.test(e.payment_mode) ? 'Counter cash (already paid)' : 'Bank transfer', ref = m === 'Bank transfer' ? 'UTR' + R(10000000, 99999999) : null;
+        Object.assign(e, { status: 'paid', paid_by: fin.name, paid_by_id: fin.id, paid_at: at(20), paid_on: ist(at(20)).date, paid_method: m, paid_reference: ref, paid_to: /Personal/.test(e.payment_mode) ? sub.name : e.vendor });
+        ev(e, 'paid', 'approved', 'paid', fin, null, at(20), { method: m, reference: ref, amount: e.amount });
+      }
+    });
+  }
   // Two accidental repeat bills today at the first outlet, like a retry on slow internet.
   T.orders.filter(o => o.store_id === 's1' && o.created_at.slice(0, 10) >= addDays(today, -1) && T.order_items.filter(i => i.order_id === o.id).length >= 2).slice(-2).forEach(o => {
     const copy = { ...o, id: nid('o'), receipt_no: 'BTJ-' + (rc++), created_at: new Date(Date.parse(o.created_at) + 38000).toISOString() };
@@ -1979,12 +2539,14 @@ function makeDemoClient() {
   const get = (r, path) => path.split('.').reduce((o, k) => o == null ? o : o[k], r);
   function enrichAll(t, rows) {
     const byId = name => new Map(T[name].map(x => [x.id, x]));
-    if (t === 'staff') { const s = byId('stores'); return rows.map(r => ({ ...r, stores: r.store_id ? { name: s.get(r.store_id)?.name } : null })); }
+    if (t === 'staff') { const s = byId('stores'); return rows.map(r => ({ ...r, stores: r.store_id ? { name: s.get(r.store_id)?.name } : null, staff_stores: T.staff_stores.filter(x => x.staff_id === r.id).map(x => ({ store_id: x.store_id })) })); }
+    if (t === 'expense_events') { const e = byId('expenses'); return rows.map(r => ({ ...r, expenses: e.get(r.expense_id) ? { amount: e.get(r.expense_id).amount, vendor: e.get(r.expense_id).vendor, category: e.get(r.expense_id).category } : null })); }
     if (t === 'drinks') { const g = {}; T.recipe_items.forEach(x => (g[x.drink_id] = g[x.drink_id] || []).push(x)); return rows.map(r => ({ ...r, recipe_items: g[r.id] || [] })); }
     if (t === 'toppings') { const i = byId('inventory'); return rows.map(r => { const v = i.get(r.inventory_id); return { ...r, inventory: v ? { name: v.name, unit: v.unit } : null }; }); }
     if (t === 'store_sales_summary') { const m = {}; T.orders.filter(o => o.status !== 'void').forEach(o => { const x = m[o.store_id] = m[o.store_id] || { store_id: o.store_id, orders: 0, revenue: 0 }; x.orders++; x.revenue += Number(o.total_amount); }); return Object.values(m); }
     if (t === 'orders') { const c = byId('customers'), g = {}; T.order_items.forEach(x => (g[x.order_id] = g[x.order_id] || []).push(x)); return rows.map(r => ({ ...r, customers: c.get(r.customer_id) || null, order_items: g[r.id] || [] })); }
     if (t === 'order_items') { const o = byId('orders'), c = byId('customers'); return rows.map(r => { const x = o.get(r.order_id); return { ...r, orders: x ? { created_at: x.created_at, store_id: x.store_id, customers: c.get(x.customer_id) || null } : null }; }); }
+    if (t === 'expenses') { const s = byId('stores'); return rows.map(r => ({ ...r, stores: s.get(r.store_id) ? { name: s.get(r.store_id).name } : null })); }
     if (t === 'grocery_inward') { const i = byId('inventory'); return rows.map(r => ({ ...r, inventory: i.get(r.inventory_id) || null })); }
     return rows.map(r => ({ ...r }));
   }
@@ -2000,6 +2562,7 @@ function makeDemoClient() {
     order(c, o = {}) { this.o.push([c, o.ascending !== false]); return this; }
     range(a, b) { this.r = [a, b]; return this; }
     limit(n) { this.lim = n; return this; }
+    or() { return this; }
     single() { this.one = 'single'; return this; }
     maybeSingle() { this.one = 'maybe'; return this; }
     insert(p) { this.op = 'insert'; this.payload = p; return this; }
@@ -2041,12 +2604,115 @@ function makeDemoClient() {
     const who = id => T.staff.find(s => sameId(s.id, id));
     const check = (id, pin, admin) => { const s = who(id); if (!s || !s.active || pin !== '1234') throw new Error('Wrong PIN. In sample data every PIN is 1234'); if (admin && s.role !== 'admin') throw new Error('Only admins can do this'); return s; };
     try {
-      if (fn === 'verify_staff_pin') { const s = who(a.p_staff_id); return { data: s && s.active && a.p_pin === '1234' ? strip(s) : null, error: null }; }
-      if (fn === 'create_staff') { check(a.p_admin_id, a.p_admin_pin, true); const s = { id: nid('u'), name: a.p_name, role: a.p_role, store_id: a.p_store_id, active: true }; T.staff.push(s); return { data: s, error: null }; }
+      if (fn === 'verify_staff_pin') { const s = who(a.p_staff_id); if (!s || !s.active) return { data: null, error: null };
+        if (s.locked_until && Date.parse(s.locked_until) > Date.now()) throw new Error(`Too many wrong PINs. Try again after ${new Date(s.locked_until).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })} or ask an admin to unlock you.`);
+        const ok = a.p_pin === '1234'; T.staff_logins.push({ staff_id: s.id, success: ok, created_at: new Date().toISOString() }); if (ok) s.last_login_at = new Date().toISOString();
+        return { data: ok ? { ...strip(s), store_ids: T.staff_stores.filter(x => x.staff_id === s.id).map(x => x.store_id) } : null, error: null }; }
       if (fn === 'reset_staff_pin') { check(a.p_admin_id, a.p_admin_pin, true); return { data: null, error: null }; }
       if (fn === 'set_staff_active') { check(a.p_admin_id, a.p_admin_pin, true); who(a.p_staff_id).active = a.p_active; return { data: null, error: null }; }
+      const perm = (s, p) => s.role === 'admin' || (s.permissions || []).includes(p);
+      const scope = (s, id) => { if (s.role === 'admin' || s.all_stores) return true; const ids = T.staff_stores.filter(x => sameId(x.staff_id, s.id)).map(x => String(x.store_id));
+        if (ids.includes(String(id))) return true; const st = T.stores.find(x => sameId(x.id, id)); return !!st && ids.includes(String(st.parent_store_id)); };
+      const logE = (e, action, from, to, s, note, details) => T.expense_events.push({ id: nid('ev'), expense_id: e.id, action, from_status: from, to_status: to, actor_id: s.id, actor_name: s.name, note: note || null, details: details || {}, created_at: new Date().toISOString() });
+      const audit = (s, action, type, target, details) => T.audit_log.push({ id: nid('a'), actor_id: s.id, actor_name: s.name, action, target_type: type, target_id: target, details, created_at: new Date().toISOString() });
+      const bill = id => { const e = T.expenses.find(x => sameId(x.id, id)); if (!e) throw new Error('Bill not found'); return e; };
+      const mineE = (s, e) => sameId(e.submitted_by_id, s.id);
+      const validate = (s, b) => {
+        if (!b.store_id) throw new Error('Pick the outlet or event this bill is for');
+        if (!scope(s, b.store_id)) throw new Error('You can only submit bills for your own outlet or its events');
+        if (!b.category) throw new Error('Pick what the bill was for');
+        if (!(Number(b.amount) > 0)) throw new Error('Enter the bill amount');
+        if (b.bill_date && b.bill_date > todayIST()) throw new Error("The bill date can't be in the future");
+        if (Number(b.amount) > 200 && !b.receipt_url) throw new Error('A photo of the bill is needed for amounts above ₹200');
+      };
+      const dupOf = (b, except) => (T.expenses.find(x => x.id !== except && sameId(x.store_id, b.store_id) && Number(x.amount) === Number(b.amount) && !['rejected', 'cancelled'].includes(x.status) &&
+        ((b.invoice_no && (x.invoice_no || '').toLowerCase() === b.invoice_no.toLowerCase()) || (b.vendor && x.bill_date === b.bill_date && (x.vendor || '').toLowerCase() === b.vendor.toLowerCase()))) || {}).id || null;
+      if (fn === 'submit_expense') {
+        const s = check(a.p_staff_id, a.p_pin), b = a.p_bill; if (!perm(s, 'expense_submit')) throw new Error("You don't have access to submit bills");
+        validate(s, b); const d = b.bill_date || todayIST();
+        const e = { id: nid('e'), store_id: b.store_id, category: b.category, amount: Number(b.amount), payment_mode: b.payment_mode, vendor: b.vendor || null, invoice_no: b.invoice_no || null, bill_date: d, notes: b.notes || null,
+          receipt_url: b.receipt_url, submitted_by: s.name, submitted_by_id: s.id, status: 'submitted', duplicate_of: dupOf({ ...b, bill_date: d }, null), created_at: new Date().toISOString() };
+        T.expenses.push(e); logE(e, 'submitted', null, 'submitted', s, null, { amount: e.amount }); return { data: e, error: null };
+      }
+      if (fn === 'resubmit_expense') {
+        const s = check(a.p_staff_id, a.p_pin), e = bill(a.p_expense_id), b = a.p_bill;
+        if (e.status !== 'sent_back') throw new Error('Only bills that were sent back can be edited');
+        if (s.role !== 'admin' && !mineE(s, e)) throw new Error('Only the person who submitted this bill can fix it');
+        validate(s, b); const old = e.amount;
+        Object.assign(e, { store_id: b.store_id, category: b.category, amount: Number(b.amount), payment_mode: b.payment_mode, vendor: b.vendor || null, invoice_no: b.invoice_no || null, bill_date: b.bill_date || e.bill_date, notes: b.notes || null, receipt_url: b.receipt_url || e.receipt_url, status: 'submitted', duplicate_of: dupOf(b, e.id) });
+        logE(e, 'resubmitted', 'sent_back', 'submitted', s, b.change_note, { old_amount: old, new_amount: e.amount }); return { data: e, error: null };
+      }
+      if (fn === 'cancel_expense') {
+        const s = check(a.p_staff_id, a.p_pin), e = bill(a.p_expense_id);
+        if (!['submitted', 'sent_back'].includes(e.status)) throw new Error('Only bills that are still waiting can be withdrawn');
+        if (s.role !== 'admin' && !mineE(s, e)) throw new Error('Only the person who submitted this bill can withdraw it');
+        const from = e.status; e.status = 'cancelled'; logE(e, 'withdrawn', from, 'cancelled', s, a.p_note); return { data: e, error: null };
+      }
+      if (fn === 'decide_expense') {
+        const s = check(a.p_staff_id, a.p_pin), e = bill(a.p_expense_id), note = (a.p_note || '').trim();
+        if (!perm(s, 'expense_approve')) throw new Error("You don't have access to approve bills");
+        if (e.status !== 'submitted') throw new Error('This bill is no longer waiting for approval');
+        if (!scope(s, e.store_id)) throw new Error('This bill belongs to another outlet');
+        if (s.role !== 'admin' && mineE(s, e)) throw new Error("You can't approve your own bill. Someone else has to.");
+        const to = { approve: 'approved', reject: 'rejected', send_back: 'sent_back' }[a.p_decision];
+        if (to === 'approved' && s.role !== 'admin' && s.approval_limit != null && e.amount > s.approval_limit) throw new Error(`This bill is above your approval limit of ₹${s.approval_limit}. An admin or someone with a higher limit has to approve it.`);
+        if (to !== 'approved' && !note) throw new Error('Add a reason so the team knows what to fix');
+        Object.assign(e, { status: to, decided_by: s.name, decided_by_id: s.id, decided_at: new Date().toISOString(), decision_note: note || null });
+        logE(e, a.p_decision, 'submitted', to, s, note, { amount: e.amount }); return { data: e, error: null };
+      }
+      if (fn === 'pay_expense') {
+        const s = check(a.p_staff_id, a.p_pin), e = bill(a.p_expense_id), p = a.p_payment;
+        if (!perm(s, 'expense_pay')) throw new Error("You don't have access to record payments");
+        if (e.status !== 'approved') throw new Error('Only approved bills can be paid');
+        if (!scope(s, e.store_id)) throw new Error('This bill belongs to another outlet');
+        if (s.role !== 'admin' && mineE(s, e)) throw new Error("You can't pay your own bill. Someone else has to.");
+        if (['Bank transfer', 'UPI', 'Cheque'].includes(p.method) && !p.reference) throw new Error('Add the UTR, UPI or cheque number');
+        if (Math.round(Number(p.amount)) !== Math.round(e.amount)) throw new Error(`The amount paid must match the approved amount of ₹${Math.round(e.amount)}`);
+        Object.assign(e, { status: 'paid', paid_by: s.name, paid_by_id: s.id, paid_at: new Date().toISOString(), paid_on: p.paid_on, paid_method: p.method, paid_reference: p.reference || null, paid_to: p.paid_to || null, payment_proof_url: p.proof_url || null });
+        logE(e, 'paid', 'approved', 'paid', s, null, { method: p.method, reference: p.reference, amount: p.amount }); return { data: e, error: null };
+      }
+      if (fn === 'admin_override_expense') {
+        const s = check(a.p_admin_id, a.p_admin_pin, true), e = bill(a.p_expense_id);
+        if (!(a.p_note || '').trim()) throw new Error('Add a reason for the change');
+        const from = e.status; e.status = a.p_status; logE(e, 'admin_override', from, a.p_status, s, a.p_note);
+        audit(s, 'bill_override', 'expense', e.id, { from, to: a.p_status, note: a.p_note }); return { data: e, error: null };
+      }
+      const idsOf = s => T.staff_stores.filter(x => sameId(x.staff_id, s.id)).map(x => x.store_id);
+      const pinOk = p => { if (!/^\d{4}$/.test(p || '')) throw new Error('PIN must be 4 digits'); if (/^(\d)\1{3}$/.test(p)) throw new Error('Pick a harder PIN. The same digit four times is easy to guess.');
+        if (['0123','1234','2345','3456','4567','5678','6789','9876','8765','7654','6543','5432','4321','3210'].includes(p)) throw new Error('Pick a harder PIN. Number sequences like 1234 are easy to guess.'); };
+      const setStores = (s, ids, all, home) => {
+        if (!all && !(ids || []).length) throw new Error('Pick at least one outlet or event, or choose all outlets');
+        if (!all && home && !ids.map(String).includes(String(home))) throw new Error('The home outlet must be one of their outlets');
+        T.staff_stores = T.staff_stores.filter(x => !sameId(x.staff_id, s.id));
+        if (!all) ids.forEach(id => T.staff_stores.push({ staff_id: s.id, store_id: id }));
+        s.all_stores = !!all; s.store_id = all ? null : (home || ids[0]);
+      };
+      const withIds = s => ({ ...strip(s), store_ids: idsOf(s), locked: !!s.locked_until && Date.parse(s.locked_until) > Date.now() });
+      if (fn === 'list_staff') { check(a.p_admin_id, a.p_admin_pin, true); return { data: [...T.staff].sort((x, y) => (y.active - x.active) || x.name.localeCompare(y.name)).map(withIds), error: null }; }
+      if (fn === 'staff_login_history') { check(a.p_admin_id, a.p_admin_pin, true); return { data: T.staff_logins.filter(x => sameId(x.staff_id, a.p_staff_id)).sort((x, y) => y.created_at.localeCompare(x.created_at)).map(x => ({ success: x.success, at: x.created_at })), error: null }; }
+      if (fn === 'update_staff_profile') { const ad = check(a.p_admin_id, a.p_admin_pin, true), t = who(a.p_staff_id), ph = normPhone(a.p_phone);
+        if (!a.p_name) throw new Error('Name is required'); if (ph && ph.length !== 10) throw new Error('Phone number must be 10 digits');
+        if (T.staff.some(x => x.id !== t.id && x.name.toLowerCase() === a.p_name.toLowerCase())) throw new Error(`Someone called ${a.p_name} already exists`);
+        const old = t.name; Object.assign(t, { name: a.p_name, phone: ph || null, notes: a.p_notes || null }); audit(ad, 'profile_changed', 'staff', t.id, { name: t.name, old_name: old }); return { data: strip(t), error: null }; }
+      if (fn === 'unlock_staff') { const ad = check(a.p_admin_id, a.p_admin_pin, true), t = who(a.p_staff_id); Object.assign(t, { locked_until: null, failed_pin_attempts: 0 }); audit(ad, 'staff_unlocked', 'staff', t.id, {}); return { data: null, error: null }; }
+      if (fn === 'change_my_pin') { const s = check(a.p_staff_id, a.p_old_pin); pinOk(a.p_new_pin); s.must_change_pin = false; audit(s, 'pin_changed', 'staff', s.id, {}); return { data: null, error: null }; }
+      if (fn === 'reset_staff_pin') { const ad = check(a.p_admin_id, a.p_admin_pin, true), t = who(a.p_staff_id); pinOk(a.p_pin);
+        Object.assign(t, { must_change_pin: t.id === ad.id ? false : a.p_must_change !== false, locked_until: null }); audit(ad, 'pin_reset', 'staff', t.id, { must_change: a.p_must_change }); return { data: null, error: null }; }
+      if (fn === 'create_staff') { const ad = check(a.p_admin_id, a.p_admin_pin, true); pinOk(a.p_pin);
+        if (T.staff.some(x => x.name.toLowerCase() === (a.p_name || '').toLowerCase())) throw new Error(`Someone called ${a.p_name} already exists. Add a surname to tell them apart.`);
+        const s = { id: nid('u'), name: a.p_name, role: a.p_role, active: true, permissions: a.p_role === 'admin' ? [] : (a.p_permissions || []), approval_limit: a.p_approval_limit ?? null,
+          phone: normPhone(a.p_phone) || null, must_change_pin: a.p_must_change_pin !== false, failed_pin_attempts: 0, locked_until: null, last_login_at: null, created_at: new Date().toISOString() };
+        setStores(s, a.p_store_ids || [], a.p_role === 'admin' || a.p_all_stores, a.p_home_store_id); T.staff.push(s);
+        audit(ad, 'staff_created', 'staff', s.id, { name: s.name }); return { data: strip(s), error: null }; }
+      if (fn === 'set_staff_access') { const ad = check(a.p_admin_id, a.p_admin_pin, true), t = who(a.p_staff_id);
+        if (t.role === 'admin' && a.p_role !== 'admin' && T.staff.filter(x => x.role === 'admin' && x.active).length <= 1) throw new Error('This is the last admin. Make someone else an admin first.');
+        const before = { role: t.role, permissions: t.permissions, approval_limit: t.approval_limit, all_stores: t.all_stores, store_ids: idsOf(t) };
+        setStores(t, a.p_store_ids || [], a.p_role === 'admin' || a.p_all_stores, a.p_home_store_id);
+        Object.assign(t, { role: a.p_role, permissions: a.p_role === 'admin' ? [] : (a.p_permissions || []), approval_limit: a.p_approval_limit });
+        audit(ad, 'access_changed', 'staff', t.id, { name: t.name, before, after: { role: t.role, permissions: t.permissions, approval_limit: t.approval_limit, all_stores: t.all_stores, store_ids: idsOf(t) } }); return { data: strip(t), error: null }; }
       if (fn === 'void_order') {
-        const s = check(a.p_admin_id, a.p_admin_pin, true), o = T.orders.find(x => sameId(x.id, a.p_order_id));
+        const s = check(a.p_admin_id, a.p_admin_pin), o = T.orders.find(x => sameId(x.id, a.p_order_id));
+        if (!perm(s, 'void_bills')) throw new Error("You don't have access to void bills");
         if (o && o.status !== 'void') {
           Object.assign(o, { status: 'void', void_reason: a.p_reason, voided_by: s.name, voided_at: new Date().toISOString() });
           T.order_items.filter(i => i.order_id === o.id).forEach(i => T.recipe_items.filter(r => r.drink_id === i.drink_id).forEach(r => { const v = T.inventory.find(x => x.id === r.inventory_id); if (v) v.stock_qty += r.qty_required; }));
@@ -2093,7 +2759,7 @@ function makeDemoClient() {
 function startDemo() {
   db = makeDemoClient(); state.demo = true; state.storeId = null;
   $('demo-pill').classList.remove('hidden');
-  $('demo-box').innerHTML = '<p class="small" style="color:var(--leaf);font-weight:700">Sample data loaded. Tap any name and enter PIN 1234. Try Sai Kumar for the admin side: see Outlets &amp; events, and the Sales log for two flagged repeat bills.</p>';
+  $('demo-box').innerHTML = '<p class="small" style="color:var(--leaf);font-weight:700">Sample data loaded. Tap any name and enter PIN 1234. Try Sai Kumar (admin, see Users &amp; access), Priya Reddy (works at two outlets), Ananya Rao (finance), Manoj Kumar (store manager) or Ravi Teja (barista). Neha Varma is locked out and Imran Khan has a temporary PIN.</p>';
   loadLoginStaff();
 }
 </script>
