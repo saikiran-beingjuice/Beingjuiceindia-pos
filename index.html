@@ -389,6 +389,7 @@ tr:last-child td{border-bottom:none}
     <div class="page">
       <!-- POS -->
       <section class="view active" id="v-pos">
+        <div id="pos-all"></div>
         <div class="pos">
           <div>
             <div class="pos-tools">
@@ -531,6 +532,33 @@ const inScope = id => {
   const s = state.stores.find(x => sameId(x.id, id));
   return !!s && !!s.parent_store_id && ids.includes(String(s.parent_store_id));
 };
+/* =========================================================
+   ALL OUTLETS VIEW: reports across every outlet a person can see
+   ========================================================= */
+const ALL = 'ALL';
+const isAll = () => state.storeId === ALL;
+const scopeStores = () => state.stores.filter(s => inScope(s.id));
+// The outlets the current reports cover: one outlet, or all of them.
+const storeFilterIds = () => isAll() ? scopeStores().map(s => String(s.id)) : [String(state.storeId)];
+const SINGLE_OUTLET_VIEWS = { pos: 'take orders', menu: 'edit the menu', boosters: 'edit boosters', recipes: 'edit recipes' };
+function pickOutletHTML(what) {
+  const list = scopeStores().filter(s => !isEvent(s) || ['live', 'upcoming'].includes(eventState(s)[0]));
+  return `<div class="panel"><h3>Pick an outlet to ${what}</h3><p class="sub">You're looking at all outlets together. This screen works one outlet at a time.</p>
+    <div class="grid g3">${list.map(s => `<button class="btn ghost lg" style="justify-content:flex-start" onclick="useStore('${esc(s.id)}')">${isEvent(s) ? '🎪' : '📍'} ${esc(s.name)}${isEvent(s) ? ` <span class="pill ${eventState(s)[2]}" style="margin-left:auto">${eventState(s)[1]}</span>` : ''}</button>`).join('')}</div></div>`;
+}
+// Small "by outlet" table used on the reports when all outlets are selected.
+function byOutletPanel(title, sub, rows, cols) {
+  if (!isAll()) return '';
+  const max = Math.max(...rows.map(r => r.sales || 0), 1);
+  return `<div class="panel" style="margin-bottom:16px"><h3>${title}</h3><p class="sub">${sub}</p><div class="table-wrap"><table>
+    <thead><tr><th>Outlet</th>${cols.map(c => `<th style="text-align:right">${c[1]}</th>`).join('')}<th style="width:30%"></th></tr></thead><tbody>
+    ${rows.sort((a, b) => (b.sales || 0) - (a.sales || 0)).map(r => `<tr><td><b>${isEvent(r.store) ? '🎪' : '📍'} ${esc(r.store?.name || 'Unknown')}</b></td>
+      ${cols.map(c => `<td style="text-align:right" class="${c[2] || ''}">${c[3] ? c[3](r[c[0]], r) : r[c[0]]}</td>`).join('')}
+      <td><div class="track" style="height:10px;background:var(--cream);border-radius:999px;overflow:hidden"><div style="height:100%;width:${Math.max(2, (r.sales || 0) / max * 100)}%;background:${colorFor(r.store?.name || '')};border-radius:999px"></div></div></td></tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+const storeById = id => state.stores.find(s => sameId(s.id, id));
+
 function accessLabel(s) {
   if (s.role === 'admin') return 'Admin';
   const p = [...(s.permissions || [])].sort().join(',');
@@ -675,7 +703,7 @@ async function enterApp() {
   $('me-name').textContent = state.me.name; $('me-role').textContent = accessLabel(state.me);
   await loadStores();
   if (state.me.store_id && state.stores.some(s => sameId(s.id, state.me.store_id))) state.storeId = String(state.me.store_id);
-  if (!inScope(state.storeId)) { const first = state.stores.find(s => inScope(s.id)); if (first) state.storeId = String(first.id); }
+  if (isAll() || !inScope(state.storeId)) { const first = state.stores.find(s => inScope(s.id)); if (first) state.storeId = String(first.id); }
   renderStoreSelect(); renderNav(); applyStorePresets();
   await Promise.all([loadSettings(), refreshStore()]);
   renderTicket(); go('pos');
@@ -728,7 +756,10 @@ function go(v) {
   $('page-title').textContent = TITLES[v] || '';
   $('side').classList.remove('open');
   window.scrollTo(0, 0);
-  if (!allowed.length) { $('v-pos').innerHTML = `<div class="panel">${emptyState('No access yet', 'Ask an admin to give you access in Team & access.')}</div>`; return; }
+  if (!allowed.length) { $('v-pos').innerHTML = `<div class="panel">${emptyState('No access yet', 'Ask an admin to give you access in Users & access.')}</div>`; return; }
+  $('pos-all').innerHTML = isAll() && v === 'pos' ? pickOutletHTML('take orders') : '';
+  document.querySelector('#v-pos .pos').style.display = isAll() ? 'none' : ''; $('fab').style.visibility = isAll() ? 'hidden' : '';
+  if (isAll() && SINGLE_OUTLET_VIEWS[v] && v !== 'pos') { $('v-' + v).innerHTML = pickOutletHTML(SINGLE_OUTLET_VIEWS[v]); return; }
   RENDER[v] && RENDER[v]();
 }
 function toggleSide() { $('side').classList.toggle('open'); }
@@ -741,7 +772,7 @@ async function loadStores() {
   const { data, error } = await db.from('stores').select('*').order('created_at');
   if (fail(error, 'Loading stores')) return;
   state.stores = data || [];
-  if ((!state.storeId || !state.stores.some(s => sameId(s.id, state.storeId))) && state.stores.length) state.storeId = String(state.stores[0].id);
+  if ((!state.storeId || (!isAll() && !state.stores.some(s => sameId(s.id, state.storeId)))) && state.stores.length) state.storeId = String(state.stores[0].id);
   renderStoreSelect();
 }
 // Outlets and events grouped. The top-bar switcher hides finished or cancelled events.
@@ -755,10 +786,11 @@ function storeOptions(selected, { allOption = '', switcher = false, scoped = fal
     (events.length ? `<optgroup label="Events">${events.map(opt).join('')}</optgroup>` : '');
 }
 function renderStoreSelect() {
-  const sel = $('store-select');
-  sel.innerHTML = storeOptions(state.storeId, { switcher: true }) || '<option>No outlets yet</option>';
+  const sel = $('store-select'), many = state.me && scopeStores().length > 1;
+  sel.innerHTML = (many ? `<option value="${ALL}" ${isAll() ? 'selected' : ''}>${isAdmin() || state.me.all_stores ? 'All outlets & events' : 'All my outlets'}</option>` : '') +
+    (storeOptions(state.storeId, { switcher: true }) || '<option>No outlets yet</option>');
   sel.disabled = sel.options.length <= 1;
-  $('store-emoji').textContent = isEvent(currentStore()) ? '🎪' : '📍';
+  $('store-emoji').textContent = isAll() ? '🌐' : isEvent(currentStore()) ? '🎪' : '📍';
 }
 // Inside an event, reports default to "Whole event"; back at an outlet they return to normal.
 function applyStorePresets() {
@@ -772,14 +804,14 @@ async function changeStore(id) {
   if (state.cart.length && !(await confirmBox('Switch store?', 'The current order will be cleared.', 'Switch store'))) { renderStoreSelect(); return; }
   state.storeId = id; state.cart = []; state.checkoutRef = null; renderTicket();
   applyStorePresets(); renderStoreSelect();
-  await refreshStore(); RENDER[state.view] && RENDER[state.view]();
+  await refreshStore(); go(state.view);
 }
 async function refreshStore() {
   if (!state.storeId) return;
   const [d, t, i] = await Promise.all([
-    db.from('drinks').select('*, recipe_items(*)').eq('store_id', state.storeId).order('name'),
-    db.from('toppings').select('*, inventory(name, unit)').eq('store_id', state.storeId).order('name'),
-    db.from('inventory').select('*').eq('store_id', state.storeId).order('name')
+    db.from('drinks').select('*, recipe_items(*)').in('store_id', storeFilterIds()).order('name'),
+    db.from('toppings').select('*, inventory(name, unit)').in('store_id', storeFilterIds()).order('name'),
+    db.from('inventory').select('*').in('store_id', storeFilterIds()).order('name')
   ]);
   fail(d.error, 'Loading menu'); fail(t.error, 'Loading boosters'); fail(i.error, 'Loading stock');
   state.drinks = d.data || []; state.toppings = t.data || []; state.inventory = i.data || [];
@@ -1133,14 +1165,14 @@ RENDER.sales = async function () {
       <span class="muted small">${longDate(d)}</span><span class="spacer"></span>
       ${can('reports') ? '<button class="btn ghost sm" onclick="exportSales()">Download Excel</button>' : ''}
     </div><div id="sales-body">${LOADING}</div>`;
-  const cols = can('reports') ? '*, customers(name, phone), order_items(drink_name, selected_addons)' : 'id, receipt_no, created_at, total_amount, subtotal_amount, discount_amount, discount_percent, payment_method, barista_name, customer_id, status, order_items(drink_name, selected_addons)';
-  const orders = await fetchAll(() => db.from('orders').select(cols).eq('store_id', state.storeId).gte('created_at', dayStart(d)).lte('created_at', dayEnd(d)).order('created_at', { ascending: false }), 'Loading sales');
+  const cols = can('reports') ? '*, customers(name, phone), order_items(drink_name, selected_addons)' : 'id, store_id, receipt_no, created_at, total_amount, subtotal_amount, discount_amount, discount_percent, payment_method, barista_name, customer_id, status, order_items(drink_name, selected_addons)';
+  const orders = await fetchAll(() => db.from('orders').select(cols).in('store_id', storeFilterIds()).gte('created_at', dayStart(d)).lte('created_at', dayEnd(d)).order('created_at', { ascending: false }), 'Loading sales');
   state.cache.sales = orders;
   if (state.view !== 'sales') return;
   if (!orders.length) { $('sales-body').innerHTML = `<div class="panel">${emptyState('No sales on this day', 'Orders you settle at the counter show up here straight away.')}</div>`; return; }
 
   // Flag bills that look like accidental repeats: same guest, total and drinks within 3 minutes.
-  const sig = o => `${o.customer_id}|${Number(o.total_amount)}|${(o.order_items || []).map(i => i.drink_name).sort().join(',')}`;
+  const sig = o => `${o.store_id}|${o.customer_id}|${Number(o.total_amount)}|${(o.order_items || []).map(i => i.drink_name).sort().join(',')}`;
   const live = orders.filter(o => o.status !== 'void');
   [...live].sort((a, b) => a.created_at.localeCompare(b.created_at)).forEach((o, i, arr) => {
     for (let k = i - 1; k >= 0 && Date.parse(o.created_at) - Date.parse(arr[k].created_at) <= 180000; k--) {
@@ -1164,10 +1196,12 @@ RENDER.sales = async function () {
     </div>
     <div class="panel" style="margin-bottom:16px"><h3>How guests paid</h3>
       ${stackBar(['UPI', 'CARD', 'CASH'].map(k => ({ k: PAY_NAMES[k], v: byPay[k] || 0, c: PAY_COLORS[k], label: inr(byPay[k] || 0) })))}</div>
+    ${byOutletPanel('Sales by outlet', 'Voided bills are left out.', Object.values(live.reduce((m, o) => { const x = m[o.store_id] = m[o.store_id] || { store: storeById(o.store_id), sales: 0, orders: 0 }; x.sales += Number(o.total_amount); x.orders++; return m; }, {})),
+      [['orders', 'Orders'], ['sales', 'Sales', 'money', inr], ['avg', 'Avg bill', '', (v, r) => inr(r.sales / r.orders)]])}
     <div class="panel"><div class="table-wrap"><table>
-      <thead><tr><th>Time</th><th>Receipt</th>${can('reports') ? '<th>Guest</th>' : ''}<th>Drinks</th><th>Barista</th><th>Paid by</th><th style="text-align:right">Total</th>${can('void_bills') ? '<th></th>' : ''}</tr></thead>
+      <thead><tr><th>Time</th>${isAll() ? '<th>Outlet</th>' : ''}<th>Receipt</th>${can('reports') ? '<th>Guest</th>' : ''}<th>Drinks</th><th>Barista</th><th>Paid by</th><th style="text-align:right">Total</th>${can('void_bills') ? '<th></th>' : ''}</tr></thead>
       <tbody>${orders.map((o, i) => { const v = o.status === 'void'; return `<tr style="${v ? 'opacity:.5' : o._dupOf ? 'background:#FFF6E6' : ''}">
-        <td>${timeOf(o.created_at)}</td>
+        <td>${timeOf(o.created_at)}</td>${isAll() ? `<td class="small">${esc(storeById(o.store_id)?.name || '')}</td>` : ''}
         <td><b style="${v ? 'text-decoration:line-through' : ''}">${esc(o.receipt_no || String(o.id).slice(0, 8))}</b>
           ${v ? `<br><span class="pill out">Voided</span> <span class="small muted">${esc(o.void_reason || '')}</span>` : o._dupOf ? `<br><span class="pill low">Repeat of ${esc(o._dupOf)}?</span>` : ''}</td>
         ${can('reports') ? `<td>${esc(o.customers?.name || 'Guest')}<br><span class="muted small">${esc(o.customers?.phone || '')}</span></td>` : ''}
@@ -1195,7 +1229,7 @@ async function doVoid(i) {
   closeModal(); toast(`${o.receipt_no} voided`, 'ok'); refreshStore(); RENDER.sales();
 }
 function exportSales() {
-  exportXLSX(state.cache.sales.map(o => ({ Time: timeOf(o.created_at), Receipt: o.receipt_no, Status: o.status === 'void' ? 'Voided' : 'Paid', 'Void reason': o.void_reason || '', Guest: o.customers?.name || '', Phone: o.customers?.phone || '',
+  exportXLSX(state.cache.sales.map(o => ({ Time: timeOf(o.created_at), Outlet: storeById(o.store_id)?.name || '', Receipt: o.receipt_no, Status: o.status === 'void' ? 'Voided' : 'Paid', 'Void reason': o.void_reason || '', Guest: o.customers?.name || '', Phone: o.customers?.phone || '',
     Drinks: (o.order_items || []).map(i => i.drink_name).join(', '), Barista: o.barista_name, Payment: o.payment_method,
     Subtotal: Number(o.subtotal_amount || o.total_amount), Discount: Number(o.discount_amount || 0), Total: Number(o.total_amount), 'Possible repeat of': o._dupOf || '' })), 'sales');
 }
@@ -1306,7 +1340,7 @@ function billList(list, emptyT, emptyB) {
 /* ---------- submit ---------- */
 function drawBillForm(body, e = null) {
   const scoped = state.stores.filter(s => inScope(s.id));
-  const def = e ? e.store_id : (inScope(state.storeId) ? state.storeId : scoped[0]?.id);
+  const def = e ? e.store_id : (!isAll() && inScope(state.storeId) ? state.storeId : scoped[0]?.id);
   body.innerHTML = `<div class="grid g2" style="align-items:start">
     <div class="panel">
       <h3>${e ? 'Fix and resubmit' : 'New bill'}</h3><p class="sub">${e ? `Sent back by ${esc(e.decided_by || 'the approver')}: "${esc(e.decision_note || '')}"` : 'It goes to an approver first, then to finance for payment.'}</p>
@@ -1473,8 +1507,8 @@ RENDER.dashboard = async function () {
   const el = $('v-dashboard'), r = range('dashboard');
   el.innerHTML = periodBar('dashboard') + LOADING;
   const orders = await fetchAll(() => db.from('orders')
-    .select('id, created_at, total_amount, discount_amount, payment_method, barista_name, customer_id, order_items(drink_id, drink_name, price, selected_addons, feedback_rating)')
-    .eq('store_id', state.storeId).neq('status', 'void').gte('created_at', dayStart(r.ps)).lte('created_at', dayEnd(r.e)).order('created_at'), 'Loading dashboard');
+    .select('id, store_id, created_at, total_amount, discount_amount, payment_method, barista_name, customer_id, order_items(drink_id, drink_name, price, selected_addons, feedback_rating)')
+    .in('store_id', storeFilterIds()).neq('status', 'void').gte('created_at', dayStart(r.ps)).lte('created_at', dayEnd(r.e)).order('created_at'), 'Loading dashboard');
   if (state.view !== 'dashboard') return;
   orders.forEach(o => o._d = ist(o.created_at));
   const cur = orders.filter(o => o._d.date >= r.s), prev = orders.filter(o => o._d.date < r.s);
@@ -1522,6 +1556,10 @@ RENDER.dashboard = async function () {
       ${kpi('Average bill', inr(A.avg), delta(A.avg, B.avg), 'var(--kiwi)')}
       ${kpi('Guest rating', A.rated ? A.rating.toFixed(1) + ' ★' : '—', A.rated ? `<span class="delta flat">from ${A.rated} ratings</span>` : '<span class="delta flat">No ratings yet</span>', 'var(--orange)')}
     </div>
+    ${(() => { if (!isAll()) return ''; const m = {}; const row = id => m[id] = m[id] || { store: storeById(id), sales: 0, orders: 0, prev: 0 };
+        cur.forEach(o => { const x = row(o.store_id); x.sales += Number(o.total_amount); x.orders++; }); prev.forEach(o => { row(o.store_id).prev += Number(o.total_amount); });
+        return byOutletPanel('Outlets compared', 'Sales in this period, and the change from the period before.', Object.values(m),
+          [['orders', 'Orders'], ['sales', 'Sales', 'money', inr], ['share', 'Share', '', (v, r) => pct(r.sales, A.rev) + '%'], ['prev', 'vs before', '', (v, r) => r.prev ? `<span style="color:${r.sales >= r.prev ? 'var(--leaf)' : 'var(--red)'};font-weight:700">${r.sales >= r.prev ? '▲' : '▼'} ${Math.abs(Math.round((r.sales - r.prev) / r.prev * 100))}%</span>` : '<span class="muted">New</span>']]); })()}
     <div class="grid g3" style="margin-bottom:16px">
       <div class="panel span2"><h3>${r.n > 1 ? 'Sales by day' : 'Sales by hour'}</h3><p class="sub">Bars show money in, the line shows number of orders.</p><div class="chart-box"><canvas id="ch-trend"></canvas></div></div>
       <div class="panel"><h3>How guests paid</h3><p class="sub">Share of sales by payment type.</p>
@@ -1568,9 +1606,9 @@ RENDER.accounts = async function () {
   const el = $('v-accounts'), r = range('accounts');
   el.innerHTML = periodBar('accounts') + LOADING;
   const [orders, allExps, inward] = await Promise.all([
-    fetchAll(() => db.from('orders').select('total_amount, payment_method, created_at').eq('store_id', state.storeId).neq('status', 'void').gte('created_at', dayStart(r.s)).lte('created_at', dayEnd(r.e)).order('created_at'), 'Loading sales'),
-    fetchAll(() => db.from('expenses').select('*').eq('store_id', state.storeId).gte('created_at', dayStart(r.s)).lte('created_at', dayEnd(r.e)).order('created_at', { ascending: false }), 'Loading expenses'),
-    db.from('grocery_inward').select('cost_price, created_at').eq('store_id', state.storeId).gte('created_at', dayStart(r.s)).lte('created_at', dayEnd(r.e)).then(x => x.error ? [] : (x.data || []))
+    fetchAll(() => db.from('orders').select('store_id, total_amount, payment_method, created_at').in('store_id', storeFilterIds()).neq('status', 'void').gte('created_at', dayStart(r.s)).lte('created_at', dayEnd(r.e)).order('created_at'), 'Loading sales'),
+    fetchAll(() => db.from('expenses').select('*').in('store_id', storeFilterIds()).gte('created_at', dayStart(r.s)).lte('created_at', dayEnd(r.e)).order('created_at', { ascending: false }), 'Loading expenses'),
+    db.from('grocery_inward').select('store_id, cost_price, created_at').in('store_id', storeFilterIds()).gte('created_at', dayStart(r.s)).lte('created_at', dayEnd(r.e)).then(x => x.error ? [] : (x.data || []))
   ]);
   if (state.view !== 'accounts') return;
   state.cache.expenses = allExps;
@@ -1595,10 +1633,16 @@ RENDER.accounts = async function () {
       ${kpi('Profit', `<span style="color:${net >= 0 ? 'var(--leaf)' : 'var(--red)'}">${net < 0 ? '−' : ''}${inr(Math.abs(net))}</span>`, '<span class="delta flat">Money in minus money out</span>', 'var(--navy)')}
       ${kpi('Margin', inflow ? pct(net, inflow) + '%' : '—', '<span class="delta flat">Profit as a share of sales</span>', 'var(--mango)')}
     </div>
+    ${(() => { if (!isAll()) return ''; const m = {}; const row = id => m[id] = m[id] || { store: storeById(id), sales: 0, out: 0, wait: 0 };
+        orders.forEach(o => row(o.store_id).sales += Number(o.total_amount)); exps.forEach(e => row(e.store_id).out += Number(e.amount));
+        inward.forEach(g => row(g.store_id).out += Number(g.cost_price)); waiting.forEach(e => row(e.store_id).wait += Number(e.amount));
+        return byOutletPanel('Profit by outlet', 'Money in minus approved bills and stock bought. Bills still waiting for approval are shown separately.', Object.values(m),
+          [['sales', 'Money in', 'money', inr], ['out', 'Money out', '', v => '−' + inr(v)], ['profit', 'Profit', 'money', (v, r) => `<span style="color:${r.sales - r.out >= 0 ? 'var(--leaf)' : 'var(--red)'}">${inr(r.sales - r.out)}</span>`],
+           ['margin', 'Margin', '', (v, r) => r.sales ? pct(r.sales - r.out, r.sales) + '%' : '—'], ['wait', 'Waiting', '', v => v ? inr(v) : '<span class="muted">—</span>']]); })()}
     <div class="grid g3" style="margin-bottom:16px">
       <div class="panel span2"><h3>Money in vs money out</h3><p class="sub">Green is sales, red is spending, the line is daily profit.</p><div class="chart-box"><canvas id="ch-cash"></canvas></div></div>
       <div class="panel" style="background:var(--navy);color:#fff">
-        <h3>Cash drawer check</h3><p class="sub" style="color:#9FB3BB">Count the drawer and compare with this.</p>
+        <h3>Cash drawer check</h3><p class="sub" style="color:#9FB3BB">${isAll() ? 'All outlets added together. Pick one outlet to check a single drawer.' : 'Count the drawer and compare with this.'}</p>
         <div class="hbar" style="grid-template-columns:1fr auto"><span>Cash sales</span><b>+${inr(cashSales)}</b></div>
         <div class="hbar" style="grid-template-columns:1fr auto"><span>Paid from drawer</span><b>−${inr(cashOut)}</b></div>
         <div style="border-top:1px solid var(--navy-3);margin:10px 0;padding-top:12px"><div class="small" style="color:#9FB3BB">Cash that should be in the drawer</div>
@@ -1610,9 +1654,9 @@ RENDER.accounts = async function () {
       <div class="panel"><h3>Where the money went</h3><p class="sub">Spending by category.</p>${hbars(topN(byCat, 10).map(([k, v]) => ({ k: catLabel[k] || k, v, c: k.startsWith('Stock') ? 'var(--navy)' : undefined })), inr)}</div>
       <div class="panel"><h3>How sales came in</h3><p class="sub">By payment type.</p>${(() => { const p = countBy(orders, o => o.payment_method, o => Number(o.total_amount)); return stackBar(['UPI', 'CARD', 'CASH'].map(k => ({ k: PAY_NAMES[k], v: p[k] || 0, c: PAY_COLORS[k], label: inr(p[k] || 0) }))); })()}</div>
     </div>
-    <div class="panel"><h3>All bills</h3><p class="sub">Every bill for this outlet or event in the period. Only approved and paid bills count in the totals above.</p>
-      ${allExps.length ? `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Category</th><th>Vendor or note</th><th>Submitted by</th><th>Status</th><th>Bill</th><th style="text-align:right">Amount</th></tr></thead><tbody>
-        ${allExps.map(e => `<tr style="${['rejected', 'cancelled'].includes(e.status) ? 'opacity:.5' : ''}"><td>${prettyDate(e.bill_date || ist(e.created_at).date)}</td><td><b>${esc(catLabel[e.category] || e.category)}</b></td><td class="small">${esc(e.vendor || e.notes || '—')}</td>
+    <div class="panel"><h3>All bills</h3><p class="sub">Every bill for ${isAll() ? 'all your outlets' : 'this outlet or event'} in the period. Only approved and paid bills count in the totals above.</p>
+      ${allExps.length ? `<div class="table-wrap"><table><thead><tr><th>Date</th>${isAll() ? '<th>Outlet</th>' : ''}<th>Category</th><th>Vendor or note</th><th>Submitted by</th><th>Status</th><th>Bill</th><th style="text-align:right">Amount</th></tr></thead><tbody>
+        ${allExps.map(e => `<tr style="${['rejected', 'cancelled'].includes(e.status) ? 'opacity:.5' : ''}"><td>${prettyDate(e.bill_date || ist(e.created_at).date)}</td>${isAll() ? `<td class="small">${esc(storeById(e.store_id)?.name || '')}</td>` : ''}<td><b>${esc(catLabel[e.category] || e.category)}</b></td><td class="small">${esc(e.vendor || e.notes || '—')}</td>
           <td>${esc(e.submitted_by || '—')}</td><td>${billPill(e.status || 'paid')}</td>
           <td>${e.receipt_url ? `<a class="btn ghost sm" href="${esc(e.receipt_url)}" target="_blank" rel="noopener">View bill</a>` : '<span class="muted small">None</span>'}</td>
           <td style="text-align:right" class="money">−${inr(e.amount)}</td></tr>`).join('')}</tbody></table></div>` : emptyState('No bills in this period', 'The team submits bills from "Bills & expenses".')}
@@ -1627,7 +1671,7 @@ RENDER.accounts = async function () {
       scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, ticks: { callback: v => (v < 0 ? '−' : '') + inr(Math.abs(v)) }, grid: { color: '#F6ECE2' } } } } });
 };
 function exportExpenses() {
-  exportXLSX(state.cache.expenses.map(e => ({ Date: e.bill_date || ist(e.created_at).date, Status: (BILL_STATUS[e.status] || [e.status || 'Paid'])[0], Category: e.category, Vendor: e.vendor || '', Amount: Number(e.amount), 'Paid with': e.payment_mode, 'Logged by': e.submitted_by, Note: e.notes || '', Bill: e.receipt_url || '' })), 'expenses');
+  exportXLSX(state.cache.expenses.map(e => ({ Date: e.bill_date || ist(e.created_at).date, Outlet: storeById(e.store_id)?.name || '', Status: (BILL_STATUS[e.status] || [e.status || 'Paid'])[0], Category: e.category, Vendor: e.vendor || '', Amount: Number(e.amount), 'Paid with': e.payment_mode, 'Logged by': e.submitted_by, Note: e.notes || '', Bill: e.receipt_url || '' })), 'expenses');
 }
 
 /* =========================================================
@@ -1644,7 +1688,7 @@ RENDER.customers = async function () {
   const el = $('v-customers'), r = range('customers');
   el.innerHTML = periodBar('customers') + LOADING;
   const orders = await fetchAll(() => db.from('orders').select('id, created_at, total_amount, customers(id, name, phone), order_items(drink_name, feedback_rating)')
-    .eq('store_id', state.storeId).neq('status', 'void').gte('created_at', dayStart(r.s)).lte('created_at', dayEnd(r.e)).order('created_at'), 'Loading guests');
+    .in('store_id', storeFilterIds()).neq('status', 'void').gte('created_at', dayStart(r.s)).lte('created_at', dayEnd(r.e)).order('created_at'), 'Loading guests');
   if (state.view !== 'customers') return;
   const today = todayIST(), map = {};
   orders.forEach(o => {
@@ -1705,7 +1749,7 @@ RENDER.feedback = async function () {
   const el = $('v-feedback'), r = range('feedback');
   el.innerHTML = periodBar('feedback') + LOADING;
   const items = await fetchAll(() => db.from('order_items').select('id, drink_name, feedback_rating, feedback_vfm, feedback_suggestion, orders!inner(created_at, store_id, status, customers(name, phone))')
-    .eq('orders.store_id', state.storeId).neq('orders.status', 'void').gte('orders.created_at', dayStart(r.s)).lte('orders.created_at', dayEnd(r.e)).not('feedback_rating', 'is', null).order('id', { ascending: false }), 'Loading feedback');
+    .in('orders.store_id', storeFilterIds()).neq('orders.status', 'void').gte('orders.created_at', dayStart(r.s)).lte('orders.created_at', dayEnd(r.e)).not('feedback_rating', 'is', null).order('id', { ascending: false }), 'Loading feedback');
   if (state.view !== 'feedback') return;
   state.cache.feedback = items;
   if (!items.length) { el.innerHTML = periodBar('feedback') + `<div class="panel">${emptyState('No feedback in this period', 'After each order, tap "Ask for feedback" and hand the screen to the guest.')}</div>`; return; }
@@ -1869,6 +1913,17 @@ async function saveRecipe() {
 const reorderOf = v => Number(v.reorder_level ?? 1000);
 const stockStatus = v => Number(v.stock_qty) <= 0 ? ['out', 'Out of stock', 'var(--red)'] : Number(v.stock_qty) < reorderOf(v) ? ['low', 'Running low', 'var(--mango)'] : ['ok', 'Good', 'var(--leaf)'];
 RENDER.inventory = function () {
+  if (isAll()) {
+    const items = [...state.inventory].sort((a, b) => Number(a.stock_qty) / reorderOf(a) - Number(b.stock_qty) / reorderOf(b));
+    const low = items.filter(v => stockStatus(v)[0] !== 'ok');
+    $('v-inventory').innerHTML = `<div class="period"><span class="pill ${low.length ? 'low' : 'ok'}">${low.length ? `${low.length} item${low.length > 1 ? 's' : ''} to reorder across outlets` : 'All stock looks good everywhere'}</span>
+      <span class="muted small">Pick an outlet to restock or edit items.</span></div>
+      <div class="panel">${items.length ? `<div class="table-wrap"><table><thead><tr><th>Item</th><th>Outlet</th><th>In stock</th><th>Status</th><th></th></tr></thead><tbody>
+      ${items.map(v => { const [k, l, c] = stockStatus(v); return `<tr><td><b>${esc(v.name)}</b></td><td class="small">${esc(storeById(v.store_id)?.name || '')}</td>
+        <td><div class="row" style="flex-wrap:nowrap"><div class="stock-bar"><div style="width:${Math.min(100, Math.max(2, Number(v.stock_qty) / (reorderOf(v) * 3) * 100))}%;background:${c}"></div></div><b>${Number(v.stock_qty).toLocaleString('en-IN')}</b> <span class="muted">${esc(v.unit)}</span></div></td>
+        <td><span class="pill ${k}">${l}</span></td><td><button class="btn ghost sm" onclick="useStore('${esc(v.store_id)}')">Open outlet</button></td></tr>`; }).join('')}</tbody></table></div>` : emptyState('No stock items yet', '')}</div>`;
+    return;
+  }
   const low = state.inventory.filter(v => stockStatus(v)[0] !== 'ok');
   $('v-inventory').innerHTML = `<div class="period"><span class="pill ${low.length ? 'low' : 'ok'}">${low.length ? `${low.length} item${low.length > 1 ? 's' : ''} to reorder` : 'All stock looks good'}</span><span class="spacer"></span>
       <button class="btn berry" onclick="invModal()">+ Add stock item</button></div>
@@ -1986,7 +2041,7 @@ RENDER.stores = async function () {
 function eventModal(id) {
   const e = id ? state.stores.find(s => sameId(s.id, id)) : {};
   const outlets = state.stores.filter(s => !isEvent(s));
-  const cs = currentStore(), defParent = e.parent_store_id || (isEvent(cs) ? cs.parent_store_id : state.storeId);
+  const cs = currentStore(), defParent = e.parent_store_id || (isEvent(cs) ? cs.parent_store_id : isAll() ? null : state.storeId);
   openModal(`<h2>${id ? 'Edit ' + esc(e.name) : 'Add an event'}</h2>
     <p class="sub">Each event has its own menu, stock, staff and sales, so you can see exactly how it did.</p>
     <div class="field"><label for="ev-name">Event name</label><input class="input" id="ev-name" value="${esc(e.name || '')}" placeholder="Hyderabad Marathon Expo"></div>
@@ -2184,7 +2239,7 @@ function readAccess() {
 }
 function userModal(i) {
   const isNew = i == null;
-  const s = isNew ? { role: 'barista', permissions: ACCESS_PRESETS['Barista'].perms, approval_limit: null, all_stores: false, store_ids: inScope(state.storeId) ? [state.storeId] : [], store_id: state.storeId, active: true } : state.cache.staff[i];
+  const s = isNew ? { role: 'barista', permissions: ACCESS_PRESETS['Barista'].perms, approval_limit: null, all_stores: false, store_ids: !isAll() && inScope(state.storeId) ? [state.storeId] : [], store_id: isAll() ? null : state.storeId, active: true } : state.cache.staff[i];
   if (isNew) {
     openModal(`<h2>Add a user</h2><p class="sub">They sign in by tapping their name and entering their PIN.</p>
       <div class="grid g2" style="gap:10px"><div class="field"><label for="um-name">Full name</label><input class="input" id="um-name" placeholder="Priya Reddy"></div>
