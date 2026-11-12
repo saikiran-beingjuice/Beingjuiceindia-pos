@@ -439,6 +439,7 @@ tr:last-child td{border-bottom:none}
       <section class="view" id="v-staff"></section>
       <section class="view" id="v-settings"></section>
       <section class="view" id="v-books"></section>
+      <section class="view" id="v-payroll"></section>
     </div>
   </main>
 </div>
@@ -466,7 +467,7 @@ const IMG_BOOST = 'https://images.unsplash.com/photo-1514733670139-4d87a1941d55?
 const DISCOUNTS = [0, 10, 15, 20];
 const VFM = [['Worth Every Penny','Worth it 👍'],['Reasonable','Fair 🙂'],['Expensive','Pricey 👎']];
 const QUICK_SUGGEST = ['Less sweet','More ginger','Thicker','Less ice','Add kokum','Add jamun'];
-const EXPENSE_CATS = [
+let EXPENSE_CATS = [
   ['Produce & Fruits','🍊','Fruits & produce'],
   ['Dairy, Ice & Boosters','🧊','Dairy, ice, boosters'],
   ['Packaging & Straws','🥤','Cups & packaging'],
@@ -516,14 +517,16 @@ const PERMS = [
   ['reports', 'Dashboards, money, customers, feedback', 'Insights'],
   ['menu', 'Menu, boosters and recipes', 'Setup'], ['stock', 'Stock and restocking', 'Setup'],
   ['outlets', 'Outlets and events', 'Setup'], ['settings', 'Payment settings', 'Setup'],
-  ['accounting', 'Keep the books: journals, bank, chart of accounts, bill coding', 'Accounting'], ['accounting_view', 'See accounting reports (view only)', 'Accounting']
+  ['accounting', 'Keep the books: journals, bank, chart of accounts, bill coding', 'Accounting'], ['accounting_view', 'See accounting reports (view only)', 'Accounting'],
+  ['payroll', 'Prepare payroll: employees, pay runs (sees salaries)', 'Payroll'], ['payroll_approve', 'Approve and pay salaries, give advances', 'Payroll']
 ];
 const ACCESS_PRESETS = {
   'Barista':       { perms: ['pos', 'sales_view', 'expense_submit'], limit: null },
   'Store manager': { perms: ['pos', 'sales_view', 'void_bills', 'expense_submit', 'expense_approve', 'reports', 'menu', 'stock'], limit: 5000 },
   'Finance':       { perms: ['expense_submit', 'expense_view_all', 'expense_approve', 'expense_pay', 'reports', 'accounting_view'], limit: null },
   'Approver':      { perms: ['expense_submit', 'expense_approve'], limit: 2000 },
-  'Accountant':    { perms: ['accounting', 'accounting_view', 'expense_view_all', 'reports'], limit: null }
+  'Accountant':    { perms: ['accounting', 'accounting_view', 'expense_view_all', 'reports'], limit: null },
+  'Payroll':       { perms: ['payroll', 'reports'], limit: null }
 };
 const can = p => isAdmin() || (state.me?.permissions || []).includes(p);
 // A person tied to an outlet can act on that outlet and the events it runs.
@@ -709,7 +712,7 @@ async function enterApp() {
   if (isAll() || !inScope(state.storeId)) { const first = state.stores.find(s => inScope(s.id)); if (first) state.storeId = String(first.id); }
   if (!can('pos') && scopeStores().length > 1) state.storeId = ALL;   // office roles (finance, accountant) start on all outlets
   renderStoreSelect(); renderNav(); applyStorePresets();
-  await Promise.all([loadSettings(), refreshStore()]);
+  await Promise.all([loadSettings(), refreshStore(), loadCategories()]);
   renderTicket(); go('pos');
   if (state.me.must_change_pin) myAccountModal(true);
 }
@@ -732,8 +735,9 @@ const NAV = [
     ['accounts','📒','Money in & out', () => can('reports')],
     ['customers','👥','Customers', () => can('reports')],
     ['feedback','⭐','Feedback', () => can('reports')] ] },
-  { g:'Accounting', items:[
-    ['books','📚','Accounting', () => can('accounting') || can('accounting_view')] ] },
+  { g:'Finance', items:[
+    ['books','📚','Accounting', () => can('accounting') || can('accounting_view')],
+    ['payroll','💰','Payroll', () => can('payroll') || can('payroll_approve')] ] },
   { g:'Setup', items:[
     ['menu','🍍','Menu', () => can('menu')],
     ['boosters','🫐','Boosters', () => can('menu')],
@@ -793,7 +797,7 @@ function storeOptions(selected, { allOption = '', switcher = false, scoped = fal
 }
 function renderStoreSelect() {
   const sel = $('store-select'), many = state.me && scopeStores().length > 1;
-  sel.innerHTML = (many ? `<option value="${ALL}" ${isAll() ? 'selected' : ''}>${isAdmin() || state.me.all_stores ? 'All outlets & events' : 'All my outlets'}</option>` : '') +
+  sel.innerHTML = (many ? `<option value="${ALL}" ${isAll() ? 'selected' : ''}>${isAdmin() || state.me?.all_stores ? 'All outlets & events' : 'All my outlets'}</option>` : '') +
     (storeOptions(state.storeId, { switcher: true }) || '<option>No outlets yet</option>');
   sel.disabled = sel.options.length <= 1;
   $('store-emoji').textContent = isAll() ? '🌐' : isEvent(currentStore()) ? '🎪' : '📍';
@@ -1253,7 +1257,8 @@ const BILL_STATUS = {
   rejected: ['Rejected', 'out'], paid: ['Paid', 'ok'], cancelled: ['Withdrawn', '']
 };
 const PAY_METHODS = ['Bank transfer', 'UPI', 'Cash', 'Cheque', 'Counter cash (already paid)'];
-const catInfo = c => EXPENSE_CATS.find(x => x[0] === c) || [c, '🧾', c];
+let ALL_CATS = EXPENSE_CATS.slice();
+const catInfo = c => ALL_CATS.find(x => x[0] === c) || [c, '🧾', c];
 const billPill = st => { const [l, c] = BILL_STATUS[st] || [st, '']; return `<span class="pill ${c}">${l}</span>`; };
 const isMine = e => sameId(e.submitted_by_id, state.me.id) || (!e.submitted_by_id && e.submitted_by === state.me.name);
 const overMyLimit = e => !isAdmin() && state.me.approval_limit != null && Number(e.amount) > Number(state.me.approval_limit);
@@ -1271,7 +1276,7 @@ async function loadBills() {
   const since = new Date(Date.now() - 400 * 864e5).toISOString();
   return fetchAll(() => {
     let q = db.from('expenses').select('*, stores(name)').or(`status.in.(submitted,sent_back,approved),created_at.gte.${since}`).order('created_at', { ascending: false });
-    if (!isAdmin() && !state.me.all_stores) q = q.in('store_id', state.stores.filter(s => inScope(s.id)).map(s => String(s.id)));
+    if (!isAdmin() && !state.me?.all_stores) q = q.in('store_id', state.stores.filter(s => inScope(s.id)).map(s => String(s.id)));
     return q;
   }, 'Loading bills');
 }
@@ -1295,6 +1300,8 @@ RENDER.expense = async function () {
   if (B.toPay.length || can('expense_pay')) tabs.push(['pay', 'To pay', B.toPay.length]);
   if (can('expense_submit')) { tabs.push(['new', '+ New bill', 0]); tabs.push(['mine', 'My bills', B.mine.filter(e => e.status === 'sent_back').length]); }
   if (B.everyone) tabs.push(['all', 'All bills', 0]);
+  if (can('accounting')) tabs.push(['recurring', '🔁 Recurring', 0]);
+  if (isAdmin()) tabs.push(['cats', '🏷️ Categories', 0]);
   if (!tabs.some(t => t[0] === state.bill.tab)) state.bill.tab = B.toApprove.length ? 'approve' : B.toPay.length ? 'pay' : (tabs[0] || [])[0];
   const base = B.everyone || [...new Map([...B.mine, ...B.toApprove, ...B.toPay].map(e => [e.id, e])).values()];
   const month = todayIST().slice(0, 7);
@@ -1315,6 +1322,8 @@ RENDER.expense = async function () {
 
   const body = $('bill-body'), t = state.bill.tab;
   if (t === 'new') return drawBillForm(body);
+  if (t === 'recurring') return billRecurring(body);
+  if (t === 'cats') return billCats(body);
   if (t === 'approve') body.innerHTML = `<div class="panel"><h3>Bills waiting for your approval</h3><p class="sub">Oldest first. Open a bill to check the photo, then approve, send back or reject.${!isAdmin() && state.me.approval_limit != null ? ` Your approval limit is ${inr(state.me.approval_limit)}.` : ''}</p>${billList([...B.toApprove].reverse(), 'Nothing to approve', 'New bills from the team will show up here.')}</div>`;
   if (t === 'pay') body.innerHTML = `<div class="panel"><h3>Approved bills to pay</h3><p class="sub">Pay the vendor or the team member, then record it with the UTR or reference number.</p>${billList([...B.toPay].reverse(), 'Nothing to pay', 'Bills show up here once they are approved.')}</div>`;
   if (t === 'mine') body.innerHTML = `<div class="panel"><h3>Bills you submitted</h3><p class="sub">Tap a bill to see where it is. Bills sent back need fixing before they can be approved.</p>${billList(B.mine, 'No bills yet', 'Submit your first bill from "+ New bill".')}</div>`;
@@ -1639,7 +1648,7 @@ RENDER.accounts = async function () {
   const inD = countBy(orders, o => ist(o.created_at).date, o => Number(o.total_amount));
   const outD = countBy([...exps.map(e => ({ d: ist(e.created_at).date, v: e.amount })), ...inward.map(g => ({ d: ist(g.created_at).date, v: g.cost_price }))], x => x.d, x => Number(x.v));
   const byCat = countBy(exps, e => e.category, e => Number(e.amount)); if (stock) byCat['Stock bought (inward)'] = stock;
-  const catLabel = Object.fromEntries(EXPENSE_CATS.map(c => [c[0], c[1] + ' ' + c[2]]));
+  const catLabel = Object.fromEntries(ALL_CATS.map(c => [c[0], c[1] + ' ' + c[2]]));
 
   el.innerHTML = periodBar('accounts', `<button class="btn ghost sm" onclick="exportExpenses()">Download expenses</button>`) + `
     <div class="grid g4" style="margin-bottom:16px">
@@ -2142,7 +2151,8 @@ const SUBTYPES = {
   income: [['sales', 'Sales'], ['other_income', 'Other income'], ['contra_income', 'Reduces income (like discounts)']],
   expense: [['cogs', 'Cost of goods sold'], ['operating', 'Operating expense'], ['other', 'Other']]
 };
-const SRC = { sale: ['Sale', 'ok'], bill: ['Bill', 'low'], bill_payment: ['Bill payment', 'navy'], manual: ['Journal', 'berry'], bank: ['Bank entry', ''] };
+const SRC = { sale: ['Sale', 'ok'], bill: ['Bill', 'low'], bill_payment: ['Bill payment', 'navy'], manual: ['Journal', 'berry'], bank: ['Bank entry', ''],
+  payroll: ['Payroll', 'berry'], payroll_payment: ['Salary payment', 'navy'], advance: ['Salary advance', 'low'] };
 const canBooks = () => can('accounting');
 async function loadBooksBase(force) {
   if (!force && state.cache.accounts) return;
@@ -2154,7 +2164,7 @@ const acct = id => (state.cache.accounts || []).find(a => sameId(a.id, id));
 const acctByKey = k => (state.cache.accounts || []).find(a => a.system_key === k);
 const acctName = id => { const a = acct(id); return a ? `${a.code} ${a.name}` : '—'; };
 // Outlets for the books: everything when all outlets are selected by someone with all access.
-const ledgerStores = () => isAll() ? ((isAdmin() || state.me.all_stores) ? null : storeFilterIds()) : [String(state.storeId)];
+const ledgerStores = () => isAll() ? ((isAdmin() || state.me?.all_stores) ? null : storeFilterIds()) : [String(state.storeId)];
 const natural = a => ['asset', 'expense'].includes(a.type);
 const bal = (a, t) => !t ? 0 : (natural(a) ? 1 : -1) * (Number(t.debit) - Number(t.credit));
 async function totals(from, to, stores = ledgerStores()) {
@@ -2168,7 +2178,7 @@ function acctOptions(sel, filter = () => true, blank = 'Pick an account') {
     return list.length ? `<optgroup label="${l}">${list.map(a => `<option value="${esc(a.id)}" ${sameId(a.id, sel) ? 'selected' : ''}>${esc(a.code)} ${esc(a.name)}</option>`).join('')}</optgroup>` : '';
   }).join('');
 }
-const scopeLabel = () => isAll() ? (isAdmin() || state.me.all_stores ? 'All outlets' : 'All your outlets') : (currentStore()?.name || '');
+const scopeLabel = () => isAll() ? (isAdmin() || state.me?.all_stores ? 'All outlets' : 'All your outlets') : (currentStore()?.name || '');
 const money = (v, strong) => `<span class="${strong ? 'money' : ''}" style="${Number(v) < 0 ? 'color:var(--red)' : ''}">${Number(v) < 0 ? '−' : ''}${inr(Math.abs(Number(v)))}</span>`;
 function promptBox(title, body, label, okText = 'Confirm') {
   return new Promise(res => {
@@ -2242,7 +2252,7 @@ async function booksOverview() {
 async function booksJournals() {
   const r = range('books'), b = $('books-body');
   b.innerHTML = periodBar('books', canBooks() ? `<button class="btn ghost sm" onclick="quickEntry('spend')">Spend money</button><button class="btn ghost sm" onclick="quickEntry('receive')">Receive money</button><button class="btn ghost sm" onclick="quickEntry('transfer')">Transfer</button><button class="btn berry sm" onclick="journalForm()">+ Journal</button>` : '') +
-    `<div class="row" style="margin-bottom:12px"><div class="chips">${[['all', 'Everything'], ['sale', 'Sales'], ['bill', 'Bills'], ['bill_payment', 'Bill payments'], ['manual', 'Journals'], ['bank', 'Bank entries']].map(([k, l]) => `<button class="chip ${state.books.jsrc === k ? 'on' : ''}" onclick="state.books.jsrc='${k}';booksJournals()">${l}</button>`).join('')}</div>
+    `<div class="row" style="margin-bottom:12px"><div class="chips">${[['all', 'Everything'], ['sale', 'Sales'], ['bill', 'Bills'], ['bill_payment', 'Bill payments'], ['payroll', 'Payroll'], ['payroll_payment', 'Salary payments'], ['manual', 'Journals'], ['bank', 'Bank entries']].map(([k, l]) => `<button class="chip ${state.books.jsrc === k ? 'on' : ''}" onclick="state.books.jsrc='${k}';booksJournals()">${l}</button>`).join('')}</div>
       <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" ${state.books.showVoid ? 'checked' : ''} onchange="state.books.showVoid=this.checked;booksJournals()"> Show voided</label></div>
     <div id="jr-body">${LOADING}</div>`;
   let rows = await fetchAll(() => { let q = db.from('journals').select('*, journal_lines(account_id, store_id, debit, credit, description)').gte('entry_date', r.s).lte('entry_date', r.e).order('entry_date', { ascending: false }).order('journal_no', { ascending: false });
@@ -2269,7 +2279,7 @@ function journalModal(id) {
       ${lines.map(l => `<tr><td><b>${esc(acctName(l.account_id))}</b></td><td class="small">${esc(storeById(l.store_id)?.name || '—')}</td><td class="small">${esc(l.description || '')}</td>
         <td style="text-align:right">${Number(l.debit) ? inr(l.debit) : ''}</td><td style="text-align:right">${Number(l.credit) ? inr(l.credit) : ''}</td></tr>`).join('')}
       <tr><td colspan="3"><b>Total</b></td><td style="text-align:right" class="money">${inr(sum(lines, l => l.debit))}</td><td style="text-align:right" class="money">${inr(sum(lines, l => l.credit))}</td></tr></tbody></table></div>
-    ${['sale', 'bill', 'bill_payment'].includes(j.source_type) ? '<p class="small muted" style="margin-top:10px">Posted automatically. It changes by itself if the sale is voided or the bill is edited.</p>' : ''}
+    ${['sale', 'bill', 'bill_payment', 'payroll', 'payroll_payment', 'advance'].includes(j.source_type) ? '<p class="small muted" style="margin-top:10px">Posted automatically from a sale, bill or payroll. Change it there, not here.</p>' : ''}
     <div class="modal-actions">${canBooks() && j.status === 'posted' && ['manual', 'bank'].includes(j.source_type) ? `<button class="btn danger" onclick="voidJournal('${esc(j.id)}')">Void entry</button>` : ''}<button class="btn ghost" onclick="closeModal()">Close</button></div>`, true);
 }
 async function voidJournal(id) {
@@ -2658,7 +2668,7 @@ async function editBillModal(id) {
   const e = state.cache.bills.find(x => sameId(x.id, id)); if (!e) return;
   openModal(`<h2>Edit bill</h2><p class="sub">Admin only. Every change is saved in the bill's history with your reason, and the books update automatically.${e.status === 'paid' ? ' This bill is paid, so the amount is fixed; change its status to Approved first to change the amount.' : ''}</p>
     <div class="grid g2" style="gap:10px"><div class="field"><label for="eb-store">For</label><select class="input" id="eb-store">${storeOptions(e.store_id, { scoped: true })}</select></div>
-      <div class="field"><label for="eb-cat">Category</label><select class="input" id="eb-cat">${EXPENSE_CATS.map(([v, ic, l]) => `<option value="${esc(v)}" ${e.category === v ? 'selected' : ''}>${ic} ${l}</option>`).join('')}</select></div></div>
+      <div class="field"><label for="eb-cat">Category</label><select class="input" id="eb-cat">${[...EXPENSE_CATS, ...(EXPENSE_CATS.some(c => c[0] === e.category) ? [] : [catInfo(e.category)])].map(([v, ic, l]) => `<option value="${esc(v)}" ${e.category === v ? 'selected' : ''}>${ic} ${l}</option>`).join('')}</select></div></div>
     <div class="grid g3" style="gap:10px"><div class="field"><label for="eb-amt">Amount</label><input class="input" id="eb-amt" type="number" step="0.01" value="${esc(e.amount)}" ${e.status === 'paid' ? 'disabled' : ''}></div>
       <div class="field"><label for="eb-gst">GST in this amount</label><input class="input" id="eb-gst" type="number" step="0.01" value="${esc(e.gst_amount || 0)}"></div>
       <div class="field"><label for="eb-date">Bill date</label><input class="input" id="eb-date" type="date" max="${todayIST()}" value="${esc(e.bill_date || '')}"></div></div>
@@ -2684,6 +2694,370 @@ async function saveBillEdit(id) {
 async function recodeBill(id) {
   const { error } = await db.rpc('recode_expense', { p_staff_id: String(state.me.id), p_pin: state.pin, p_expense_id: String(id), p_account_id: $('rc-acct').value, p_gst_amount: parseFloat($('rc-gst').value) || 0, p_note: $('rc-note').value.trim() });
   if (error) return toast(error.message, 'err'); toast('Accounting details saved', 'ok'); await RENDER.expense(); billModal(id);
+}
+
+/* =========================================================
+   PAYROLL: employees, monthly pay runs, advances, payslips.
+   Pay is calculated and every rule is checked in the database.
+   ========================================================= */
+state.pay = { tab: 'runs', run: null };
+const payRpc = (fn, args) => db.rpc(fn, { p_staff_id: String(state.me.id), p_pin: state.pin, ...args });
+const monthLabel = p => new Date(p + '-15T12:00:00').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+const RUN_ST = { draft: ['Draft, being prepared', 'low'], approved: ['Approved, to pay', 'navy'], paid: ['Paid', 'ok'], cancelled: ['Cancelled', ''] };
+const payStores = () => (isAll() && (isAdmin() || state.me?.all_stores)) ? null : storeFilterIds();
+const rateText = e => e.pay_type === 'daily' ? `${inr(e.daily_rate ?? e.rate)}/day` : `${inr(e.monthly_salary ?? e.rate)}/month`;
+const bankAccts = () => (state.cache.accounts || []).filter(a => a.is_bank && a.is_active);
+
+RENDER.payroll = async function () {
+  const el = $('v-payroll'); if (!el.innerHTML) el.innerHTML = LOADING;
+  await loadBooksBase();
+  const tabs = [['runs', 'Pay runs'], ['employees', 'Employees'], ['advances', 'Advances'], ...(isAdmin() ? [['settings', 'PF, ESI and PT rates']] : [])];
+  if (!tabs.some(t => t[0] === state.pay.tab)) state.pay.tab = 'runs';
+  el.innerHTML = `<div class="period"><div class="seg" style="flex:0 1 auto">${tabs.map(([k, l]) => `<button class="${state.pay.tab === k ? 'on' : ''}" onclick="state.pay.tab='${k}';state.pay.run=null;RENDER.payroll()">${l}</button>`).join('')}</div>
+    <span class="spacer"></span><span class="pill">${esc(scopeLabel())}</span></div><div id="pay-body">${LOADING}</div>`;
+  ({ runs: state.pay.run ? () => payRunDetail(state.pay.run) : payRuns, employees: payEmployees, advances: payAdvances, settings: paySettings })[state.pay.tab]();
+};
+const payStale = t => state.view !== 'payroll' || state.pay.tab !== t;
+
+/* ---------- pay runs ---------- */
+async function payRuns() {
+  const { data, error } = await payRpc('get_payroll', { p_run_id: null });
+  if (payStale('runs')) return;
+  if (error) { $('pay-body').innerHTML = `<div class="panel">${emptyState("Can't load payroll", error.message)}</div>`; return; }
+  const runs = (data || []).filter(r => r.people > 0 || r.status === 'draft');
+  const toPay = runs.filter(r => r.status === 'approved'), last = runs.find(r => ['approved', 'paid'].includes(r.status));
+  $('pay-body').innerHTML = `
+    <div class="grid g3" style="margin-bottom:16px">
+      ${kpi('Last approved payroll', last ? inr(last.net) : '—', last ? `<span class="delta flat">${monthLabel(last.period)}, ${last.people} people, take-home</span>` : '<span class="delta flat">No pay runs yet</span>', 'var(--berry)')}
+      ${kpi('Approved, still to pay', inr(sum(toPay, r => r.net - r.paid)), `<span class="delta flat">${toPay.length} pay run${toPay.length === 1 ? '' : 's'}</span>`, 'var(--navy)')}
+      ${kpi('Employer PF and ESI', last ? inr(last.employer) : '—', '<span class="delta flat">On top of salaries, last approved run</span>', 'var(--mango)')}
+    </div>
+    <div class="panel"><div class="row" style="margin-bottom:10px"><h3 style="margin:0">Pay runs</h3><span class="spacer"></span>${can('payroll') ? '<button class="btn berry" onclick="newRunModal()">+ New pay run</button>' : ''}</div>
+      ${runs.length ? `<div class="table-wrap"><table><thead><tr><th>Month</th><th>Status</th><th style="text-align:right">People</th><th style="text-align:right">Gross pay</th><th style="text-align:right">Take-home</th><th style="text-align:right">Paid so far</th><th>Prepared by</th></tr></thead><tbody>
+        ${runs.map(r => `<tr style="cursor:pointer;${r.status === 'cancelled' ? 'opacity:.5' : ''}" onclick="state.pay.run='${esc(r.id)}';RENDER.payroll()"><td><b>${monthLabel(r.period)}</b></td>
+          <td><span class="pill ${RUN_ST[r.status][1]}">${RUN_ST[r.status][0]}</span></td><td style="text-align:right">${r.people}</td><td style="text-align:right">${inr(r.gross)}</td>
+          <td style="text-align:right" class="money">${inr(r.net)}</td><td style="text-align:right">${inr(r.paid)}</td><td class="small">${esc(r.created_by || '')}${r.approved_by ? `<br><span class="muted">Approved by ${esc(r.approved_by)}</span>` : ''}</td></tr>`).join('')}
+      </tbody></table></div>` : emptyState('No pay runs yet', 'Add your employees first, then start a pay run for the month.')}</div>`;
+}
+function newRunModal() {
+  const t = todayIST(), def = Number(t.slice(8)) <= 10 ? addDays(t.slice(0, 8) + '01', -1).slice(0, 7) : t.slice(0, 7);
+  openModal(`<h2>New pay run</h2><p class="sub">Everyone active ${payStores() ? 'at ' + esc(scopeLabel()) : ''} is added with full attendance for monthly staff and zero days for daily-wage staff. Adjust days, incentives and deductions before approval.</p>
+    <div class="field"><label for="nr-month">Month</label><input class="input" id="nr-month" type="month" max="${t.slice(0, 7)}" value="${def}"></div>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" id="nr-go" onclick="createRun()">Start pay run</button></div>`);
+}
+async function createRun() {
+  $('nr-go').disabled = true;
+  const { data, error } = await payRpc('create_payroll_run', { p_period: $('nr-month').value, p_store_ids: payStores() });
+  if (error) { $('nr-go').disabled = false; return toast(error.message, 'err'); }
+  closeModal(); toast('Pay run started', 'ok'); state.pay.run = data.id; RENDER.payroll();
+}
+async function payRunDetail(id) {
+  const { data: r, error } = await payRpc('get_payroll', { p_run_id: id });
+  if (payStale('runs')) return;
+  if (error || !r) { $('pay-body').innerHTML = `<div class="panel">${emptyState("Can't open this pay run", error?.message || '')}</div>`; return; }
+  state.cache.run = r;
+  const L = r.lines || [], edit = r.status === 'draft' && can('payroll'), payable = r.status === 'approved' && can('payroll_approve');
+  const ded = l => Number(l.pf_employee) + Number(l.esi_employee) + Number(l.pt) + Number(l.advance_recovery) + Number(l.other_deduction);
+  const num = (l, f, step = 1) => `<input class="input" type="number" min="0" step="${step}" style="width:78px;padding:7px 8px" value="${Number(l[f]) || 0}" onchange="saveLine('${esc(l.id)}', this)" data-f="${f}">`;
+  $('pay-body').innerHTML = `
+    <div class="row" style="margin-bottom:14px"><button class="btn ghost sm" onclick="state.pay.run=null;RENDER.payroll()">← All pay runs</button><h2 style="margin:0 8px">${monthLabel(r.period)}</h2>
+      <span class="pill ${RUN_ST[r.status][1]}">${RUN_ST[r.status][0]}</span><span class="spacer"></span>
+      <button class="btn ghost sm" onclick="exportRun()">Download</button>
+      ${r.status === 'draft' && can('payroll') ? `<button class="btn ghost sm" onclick="reopenRun(true)">Cancel run</button>` : ''}
+      ${r.status === 'approved' && isAdmin() ? `<button class="btn ghost sm" onclick="reopenRun(false)">Reopen</button>` : ''}
+      ${r.status === 'draft' && can('payroll_approve') ? `<button class="btn berry" onclick="approveRun()">Approve pay run</button>` : ''}
+      ${payable ? `<button class="btn berry" onclick="payModal(null)">Pay everyone left</button>` : ''}</div>
+    <div class="grid g4" style="margin-bottom:16px">
+      ${kpi('Gross pay', inr(sum(L, l => l.gross)), `<span class="delta flat">${L.length} people</span>`, 'var(--berry)')}
+      ${kpi('Deductions', inr(sum(L, ded)), `<span class="delta flat">PF ${inr(sum(L, l => l.pf_employee))}, ESI ${inr(sum(L, l => l.esi_employee))}, PT ${inr(sum(L, l => l.pt))}, advances ${inr(sum(L, l => l.advance_recovery))}</span>`, 'var(--mango)')}
+      ${kpi('Take-home to pay', inr(sum(L, l => l.net_pay)), `<span class="delta flat">Paid ${inr(sum(L.filter(l => l.status === 'paid'), l => l.net_pay))}</span>`, 'var(--leaf)')}
+      ${kpi('Employer PF and ESI', inr(sum(L, l => Number(l.pf_employer) + Number(l.esi_employer))), '<span class="delta flat">Business cost on top of salaries</span>', 'var(--navy)')}
+    </div>
+    ${edit ? `<div class="cust-hint" style="margin-bottom:12px">Monthly salaries are paid for days worked plus paid leave, out of ${L[0]?.days_in_month || 30} days. Daily wages are rate × days. Changes save as you type, and PF, ESI, PT and take-home recalculate.${can('payroll_approve') ? '' : ' Someone with approval access approves it when you are done.'}</div>` : ''}
+    ${r.status === 'draft' && !can('payroll_approve') && !edit ? '' : ''}
+    <div class="panel"><div class="table-wrap"><table style="font-size:13px"><thead><tr>${payable ? '<th><input type="checkbox" onchange="document.querySelectorAll(\'.pl-pick\').forEach(c=>c.checked=this.checked)"></th>' : ''}
+      <th>Employee</th><th>Days worked</th><th>Paid leave</th><th>Incentive</th><th>Advance recovery</th><th>Other deductions</th>
+      <th style="text-align:right">Gross</th><th style="text-align:right">PF</th><th style="text-align:right">ESI</th><th style="text-align:right">PT</th><th style="text-align:right">Take-home</th><th></th></tr></thead><tbody>
+      ${L.map(l => `<tr id="pl-${esc(l.id)}">${payable ? `<td>${l.status === 'pending' && Number(l.net_pay) > 0 ? `<input type="checkbox" class="pl-pick" value="${esc(l.id)}">` : ''}</td>` : ''}
+        <td><b>${esc(l.name)}</b><div class="small muted">${esc(l.designation || '')}${l.designation ? ', ' : ''}${rateText(l)}, ${esc(storeById(l.store_id)?.name || '')}</div>
+          ${Number(l.advance_balance) > 0 ? `<div class="small" style="color:var(--berry-deep)">Advance owed ${inr(l.advance_balance)}</div>` : ''}</td>
+        <td>${edit ? num(l, 'days_worked', .5) : `${l.days_worked}/${l.days_in_month}`}</td><td>${edit ? num(l, 'paid_leave', .5) : l.paid_leave}</td>
+        <td>${edit ? num(l, 'incentive') : inr(l.incentive)}</td><td>${edit ? num(l, 'advance_recovery') : inr(l.advance_recovery)}</td><td>${edit ? num(l, 'other_deduction') : inr(l.other_deduction)}</td>
+        <td style="text-align:right">${inr(l.gross)}</td><td style="text-align:right">${inr(l.pf_employee)}</td><td style="text-align:right">${inr(l.esi_employee)}</td><td style="text-align:right">${inr(l.pt)}</td>
+        <td style="text-align:right" class="money">${inr(l.net_pay)}</td>
+        <td style="white-space:nowrap">${r.status === 'draft' ? '' : l.status === 'paid' ? `<span class="pill ok">Paid</span> ` : '<span class="pill low">To pay</span> '}${r.status !== 'draft' ? `<button class="btn ghost sm" onclick="payslip('${esc(l.id)}')">Payslip</button>` : ''}</td></tr>`).join('')}
+    </tbody></table></div>
+    ${payable ? '<div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn" onclick="payModal(true)">Pay the ticked people</button></div>' : ''}</div>`;
+}
+async function saveLine(id, input) {
+  const tr = $('pl-' + id), v = f => tr.querySelector(`[data-f="${f}"]`).value;
+  const { error } = await payRpc('update_payroll_line', { p_line_id: id, p: { days_worked: v('days_worked'), paid_leave: v('paid_leave'), incentive: v('incentive'), advance_recovery: v('advance_recovery'), other_deduction: v('other_deduction') } });
+  if (error) toast(error.message, 'err');
+  const y = window.scrollY; await payRunDetail(state.pay.run); window.scrollTo(0, y);
+}
+async function approveRun() {
+  const r = state.cache.run;
+  if (!(await confirmBox(`Approve ${monthLabel(r.period)} payroll?`, `${r.lines.length} people, ${inr(sum(r.lines, l => l.net_pay))} take-home. Salaries, PF, ESI and PT are recorded in the books and the run can no longer be edited.`, 'Approve'))) return;
+  const { error } = await payRpc('approve_payroll_run', { p_run_id: r.id });
+  if (error) return toast(error.message, 'err'); toast('Pay run approved', 'ok'); RENDER.payroll();
+}
+async function reopenRun(cancel) {
+  const reason = await promptBox(cancel ? 'Cancel this pay run?' : 'Reopen this pay run?', cancel ? 'It will be marked cancelled. You can start a new one for the month.' : 'It goes back to draft and its entries are taken out of the books. Only possible if nobody has been paid yet.', 'Reason', cancel ? 'Cancel run' : 'Reopen');
+  if (!reason) return;
+  const { error } = await payRpc('reopen_payroll_run', { p_run_id: state.cache.run.id, p_cancel: cancel, p_reason: reason });
+  if (error) return toast(error.message, 'err'); toast(cancel ? 'Pay run cancelled' : 'Pay run reopened', 'ok'); if (cancel) state.pay.run = null; RENDER.payroll();
+}
+function payModal(picked) {
+  const r = state.cache.run, ids = picked ? [...document.querySelectorAll('.pl-pick:checked')].map(c => c.value) : null;
+  const lines = r.lines.filter(l => l.status === 'pending' && Number(l.net_pay) > 0 && (!ids || ids.includes(String(l.id))));
+  if (!lines.length) return toast(picked ? 'Tick the people you paid' : 'Everyone is already paid', 'err');
+  openModal(`<h2>Record salary payment</h2><p class="sub">${lines.length} ${lines.length === 1 ? 'person' : 'people'}, ${inr(sum(lines, l => l.net_pay))} in total. Record this after the money has actually gone out.</p>
+    <div class="grid g2" style="gap:10px"><div class="field"><label for="pp-m">Paid by</label><select class="input" id="pp-m">${['Bank transfer', 'UPI', 'Cash', 'Cheque'].map(x => `<option>${x}</option>`).join('')}</select></div>
+      <div class="field"><label for="pp-ref">UTR or reference</label><input class="input" id="pp-ref" placeholder="Needed for bank, UPI, cheque"></div></div>
+    <div class="grid g2" style="gap:10px"><div class="field"><label for="pp-from">Paid from</label><select class="input" id="pp-from">${acctOptions(acctByKey('bank')?.id, a => a.is_bank, 'Pick the account')}</select></div>
+      <div class="field"><label for="pp-on">Paid on</label><input class="input" id="pp-on" type="date" max="${todayIST()}" value="${todayIST()}"></div></div>
+    <div class="table-wrap" style="max-height:200px"><table><tbody>${lines.map(l => `<tr><td>${esc(l.name)}<div class="small muted">${esc(l.pay_method || '')}${l.pay_details ? ': ' + esc(l.pay_details) : ''}</div></td><td style="text-align:right" class="money">${inr(l.net_pay)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" id="pp-go" onclick="doPay(${ids ? `'${ids.join(',')}'` : 'null'})">Record payment</button></div>`);
+}
+async function doPay(ids) {
+  $('pp-go').disabled = true;
+  const { error } = await payRpc('pay_payroll', { p_run_id: state.cache.run.id, p_line_ids: ids ? ids.split(',') : null,
+    p: { method: $('pp-m').value, reference: $('pp-ref').value.trim(), from_account_id: $('pp-from').value, paid_on: $('pp-on').value } });
+  if (error) { $('pp-go').disabled = false; return toast(error.message, 'err'); }
+  closeModal(); toast('Salary payment recorded', 'ok'); RENDER.payroll();
+}
+function exportRun() {
+  const r = state.cache.run;
+  exportXLSX(r.lines.map(l => ({ Employee: l.name, Designation: l.designation || '', Outlet: storeById(l.store_id)?.name || '', 'Pay type': l.pay_type, Rate: Number(l.rate), 'Days in month': l.days_in_month,
+    'Days worked': Number(l.days_worked), 'Paid leave': Number(l.paid_leave), Earned: Number(l.earned), Incentive: Number(l.incentive), Gross: Number(l.gross), 'PF (employee)': Number(l.pf_employee),
+    'ESI (employee)': Number(l.esi_employee), PT: Number(l.pt), 'Advance recovery': Number(l.advance_recovery), 'Other deductions': Number(l.other_deduction), 'Take-home': Number(l.net_pay),
+    'PF (employer)': Number(l.pf_employer), 'ESI (employer)': Number(l.esi_employer), 'Pay to': l.pay_details || '', 'Pay method': l.pay_method || '', Status: l.status, UAN: l.uan || '', 'ESI no.': l.esi_no || '' })), 'payroll-' + r.period);
+}
+
+/* ---------- payslip (printable) ---------- */
+function payslipHTML(l, period) {
+  const row = (k, v) => v ? `<tr><td>${k}</td><td style="text-align:right">${inr(v)}</td></tr>` : '';
+  const ded = Number(l.pf_employee) + Number(l.esi_employee) + Number(l.pt) + Number(l.advance_recovery) + Number(l.other_deduction);
+  return `<div style="font-family:system-ui,sans-serif;color:#21343C;max-width:640px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #EE3F7F;padding-bottom:10px;margin-bottom:14px">
+      <div><div style="font-size:22px;font-weight:800">Be <span style="color:#EE3F7F">the Juice</span></div><div style="color:#6A7B83;font-size:13px">Payslip for ${monthLabel(period)}</div></div>
+      <div style="text-align:right;font-size:13px"><b>${esc(l.name)}</b><br>${esc(l.designation || '')}<br>${esc(storeById(l.store_id)?.name || '')}</div></div>
+    <table style="width:100%;font-size:13px;margin-bottom:12px"><tr><td>Pay type: <b>${l.pay_type === 'daily' ? 'Daily wage' : 'Monthly salary'}</b> (${inr(l.rate)}${l.pay_type === 'daily' ? '/day' : '/month'})</td>
+      <td>Days worked: <b>${l.days_worked}</b>${Number(l.paid_leave) ? ` + ${l.paid_leave} paid leave` : ''} of ${l.days_in_month}</td></tr>
+      <tr><td>${l.uan ? 'UAN: ' + esc(l.uan) : ''}</td><td>${l.esi_no ? 'ESI no.: ' + esc(l.esi_no) : ''}</td></tr></table>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <table style="width:100%;font-size:13px;border-collapse:collapse"><tr><th style="text-align:left;border-bottom:1px solid #ddd">Earnings</th><th></th></tr>${row('Salary for days worked', l.earned)}${row('Incentive', l.incentive)}<tr style="font-weight:800"><td>Gross</td><td style="text-align:right">${inr(l.gross)}</td></tr></table>
+      <table style="width:100%;font-size:13px;border-collapse:collapse"><tr><th style="text-align:left;border-bottom:1px solid #ddd">Deductions</th><th></th></tr>${ded ? '' : '<tr><td style="color:#6A7B83">No deductions</td><td></td></tr>'}${row('Provident fund', l.pf_employee)}${row('ESI', l.esi_employee)}${row('Professional tax', l.pt)}${row('Advance recovery', l.advance_recovery)}${row('Other deductions', l.other_deduction)}<tr style="font-weight:800"><td>Total</td><td style="text-align:right">${inr(ded)}</td></tr></table></div>
+    <div style="margin-top:16px;padding:12px 14px;background:#FFF7F0;border-radius:10px;display:flex;justify-content:space-between;font-size:16px"><b>Take-home pay</b><b>${inr(l.net_pay)}</b></div>
+    <p style="font-size:12px;color:#6A7B83;margin-top:10px">${l.status === 'paid' ? `Paid on ${l.paid_on ? prettyDate(l.paid_on) : ''} by ${esc(l.paid_method || '')}.` : 'Not paid yet.'}${Number(l.advance_balance) > 0 ? ` Advance still owed: ${inr(l.advance_balance)}.` : ''} Computer-generated payslip.</p></div>`;
+}
+function showPayslip(l, period) {
+  openModal(`${payslipHTML(l, period)}<div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button><button class="btn berry" onclick="printPayslip()">Print or save as PDF</button></div>`, true);
+  state.cache.slip = { l, period };
+}
+function payslip(id) { const l = state.cache.run.lines.find(x => sameId(x.id, id)); showPayslip(l, state.cache.run.period); }
+function printPayslip() {
+  const { l, period } = state.cache.slip, w = window.open('', '_blank');
+  if (!w) return toast('Your browser blocked the print window. Allow pop-ups for this site.', 'err');
+  w.document.write(`<html><head><title>Payslip ${esc(l.name)} ${period}</title></head><body style="padding:24px">${payslipHTML(l, period)}<script>setTimeout(()=>print(),300)<\/script></body></html>`); w.document.close();
+}
+
+/* ---------- employees ---------- */
+async function payEmployees() {
+  const { data, error } = await payRpc('list_employees', {});
+  if (payStale('employees')) return;
+  if (error) { $('pay-body').innerHTML = `<div class="panel">${emptyState("Can't load employees", error.message)}</div>`; return; }
+  const ids = payStores(); state.cache.emps = (data || []).filter(e => !ids || ids.includes(String(e.store_id)));
+  const E = state.cache.emps, act = E.filter(e => e.is_active);
+  $('pay-body').innerHTML = `<div class="grid g3" style="margin-bottom:16px">
+      ${kpi('Active employees', act.length, `<span class="delta flat">${act.filter(e => e.pay_type === 'monthly').length} monthly, ${act.filter(e => e.pay_type === 'daily').length} daily wage</span>`, 'var(--berry)')}
+      ${kpi('Monthly salary bill', inr(sum(act.filter(e => e.pay_type === 'monthly'), e => e.monthly_salary)), '<span class="delta flat">Fixed salaries, before deductions</span>', 'var(--navy)')}
+      ${kpi('Advances owed to you', inr(sum(E, e => Math.max(0, e.advance_balance))), '<span class="delta flat">Recovered from pay each month</span>', 'var(--mango)')}</div>
+    <div class="panel"><div class="row" style="margin-bottom:10px"><h3 style="margin:0">Employees</h3><span class="spacer"></span>${can('payroll') ? '<button class="btn berry" onclick="employeeModal()">+ Add employee</button>' : ''}</div>
+    ${E.length ? `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Outlet</th><th>Pay</th><th>Statutory</th><th style="text-align:right">Advance owed</th><th></th></tr></thead><tbody>
+      ${E.map((e, i) => `<tr style="${e.is_active ? '' : 'opacity:.5'}"><td><b>${esc(e.name)}</b>${e.staff_name ? ' <span class="pill" title="Uses the app">App user</span>' : ''}<div class="small muted">${esc(e.designation || '')}${e.join_date ? `${e.designation ? ', ' : ''}joined ${prettyDate(e.join_date)}` : ''}</div></td>
+        <td class="small">${esc(storeById(e.store_id)?.name || '')}</td><td>${rateText(e)}</td>
+        <td>${[e.pf_on && 'PF', e.esi_on && 'ESI', e.pt_on && 'PT'].filter(Boolean).map(x => `<span class="pill">${x}</span>`).join(' ') || '<span class="muted small">None</span>'}</td>
+        <td style="text-align:right">${Number(e.advance_balance) > 0 ? inr(e.advance_balance) : '<span class="muted">—</span>'}</td>
+        <td>${can('payroll') ? `<button class="btn ghost sm" onclick="employeeModal(${i})">Edit</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : emptyState('No employees yet', 'Add everyone you pay, including helpers who don\u2019t use the app.')}</div>`;
+}
+function employeeModal(i) {
+  const e = i == null ? { pay_type: 'monthly', pt_on: true, pay_method: 'Bank transfer', is_active: true, store_id: isAll() ? null : state.storeId } : state.cache.emps[i];
+  const taken = new Set((state.cache.emps || []).filter(x => x.staff_id && x !== e).map(x => String(x.staff_id)));
+  const chk = (id, on, label) => `<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="${id}" ${on ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--berry)"> ${label}</label>`;
+  openModal(`<h2>${i == null ? 'Add an employee' : 'Edit ' + esc(e.name)}</h2><p class="sub">Salary details are private: only people with payroll access can see them.</p>
+    <div class="grid g3" style="gap:10px"><div class="field"><label for="em-name">Name</label><input class="input" id="em-name" value="${esc(e.name || '')}"></div>
+      <div class="field"><label for="em-des">Role</label><input class="input" id="em-des" value="${esc(e.designation || '')}" placeholder="Barista, helper, manager"></div>
+      <div class="field"><label for="em-phone">Phone</label><input class="input" id="em-phone" value="${esc(e.phone || '')}"></div></div>
+    <div class="grid g3" style="gap:10px"><div class="field"><label for="em-store">Salary charged to</label><select class="input" id="em-store">${storeOptions(e.store_id, { scoped: true })}</select></div>
+      <div class="field"><label for="em-staff">Uses the app as</label><select class="input" id="em-staff"><option value="">Doesn't use the app</option>${state.loginStaff.filter(s => !taken.has(String(s.id))).map(s => `<option value="${esc(s.id)}" ${sameId(s.id, e.staff_id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
+      <div class="field"><label for="em-join">Joined on</label><input class="input" id="em-join" type="date" value="${esc(e.join_date || '')}"></div></div>
+    <div class="field"><label>Paid</label><div class="seg" id="em-type"><button class="${e.pay_type === 'monthly' ? 'on' : ''}" data-t="monthly" onclick="emType('monthly')">Fixed monthly salary</button><button class="${e.pay_type === 'daily' ? 'on' : ''}" data-t="daily" onclick="emType('daily')">Daily wage</button></div></div>
+    <div class="grid g2" style="gap:10px"><div class="field" id="em-m-wrap"><label for="em-sal">Monthly salary (₹)</label><input class="input" id="em-sal" type="number" value="${esc(e.monthly_salary || '')}"></div>
+      <div class="field" id="em-d-wrap"><label for="em-rate">Daily wage (₹)</label><input class="input" id="em-rate" type="number" value="${esc(e.daily_rate || '')}"></div></div>
+    <div class="fb-card"><h4>Statutory deductions</h4><div class="grid g3" style="gap:10px">
+      <div>${chk('em-pf', e.pf_on, 'Provident fund (PF)')}<input class="input" id="em-uan" placeholder="UAN" value="${esc(e.uan || '')}" style="margin-top:6px"></div>
+      <div>${chk('em-esi', e.esi_on, 'ESI')}<input class="input" id="em-esino" placeholder="ESI number" value="${esc(e.esi_no || '')}" style="margin-top:6px"></div>
+      <div>${chk('em-pt', e.pt_on, 'Professional tax')}<div class="small muted" style="margin-top:6px">Telangana slabs, set in Payroll settings.</div></div></div></div>
+    <div class="grid g2" style="gap:10px"><div class="field"><label for="em-pm">Usually paid by</label><select class="input" id="em-pm">${['Bank transfer', 'UPI', 'Cash', 'Cheque'].map(x => `<option ${e.pay_method === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+      <div class="field"><label for="em-pd">Bank account and IFSC, or UPI ID</label><input class="input" id="em-pd" value="${esc(e.pay_details || '')}"></div></div>
+    <div class="field"><label for="em-notes">Notes</label><input class="input" id="em-notes" value="${esc(e.notes || '')}"></div>
+    ${i != null ? chk('em-active', !e.is_active, 'No longer works here (keeps their history)') : ''}
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" id="em-go" onclick="saveEmployee(${i == null ? 'null' : `'${esc(e.id)}'`})">Save employee</button></div>`, true);
+  emType(e.pay_type);
+}
+function emType(t) { document.querySelectorAll('#em-type button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); $('em-m-wrap').style.display = t === 'monthly' ? '' : 'none'; $('em-d-wrap').style.display = t === 'daily' ? '' : 'none'; }
+async function saveEmployee(id) {
+  const t = document.querySelector('#em-type button.on').dataset.t;
+  const p = { name: $('em-name').value.trim(), designation: $('em-des').value.trim(), phone: $('em-phone').value.trim(), store_id: $('em-store').value, staff_id: $('em-staff').value, join_date: $('em-join').value,
+    pay_type: t, monthly_salary: t === 'monthly' ? $('em-sal').value : 0, daily_rate: t === 'daily' ? $('em-rate').value : 0, pf_on: $('em-pf').checked, uan: $('em-uan').value.trim(),
+    esi_on: $('em-esi').checked, esi_no: $('em-esino').value.trim(), pt_on: $('em-pt').checked, pay_method: $('em-pm').value, pay_details: $('em-pd').value.trim(), notes: $('em-notes').value.trim(),
+    is_active: !($('em-active')?.checked) };
+  $('em-go').disabled = true;
+  const { error } = await payRpc('save_employee', { p_id: id, p });
+  if (error) { $('em-go').disabled = false; return toast(error.message, 'err'); }
+  closeModal(); toast(`${p.name} saved`, 'ok'); payEmployees();
+}
+
+/* ---------- advances ---------- */
+async function payAdvances() {
+  const { data, error } = await payRpc('list_employees', {});
+  if (payStale('advances')) return;
+  if (error) { $('pay-body').innerHTML = `<div class="panel">${emptyState("Can't load advances", error.message)}</div>`; return; }
+  const ids = payStores(); state.cache.emps = (data || []).filter(e => !ids || ids.includes(String(e.store_id)));
+  const rows = state.cache.emps.flatMap(e => (e.advances || []).map(a => ({ ...a, emp: e })));
+  $('pay-body').innerHTML = `<div class="grid g3" style="margin-bottom:16px">
+      ${kpi('Advances owed to you', inr(sum(state.cache.emps, e => Math.max(0, e.advance_balance))), `<span class="delta flat">${state.cache.emps.filter(e => e.advance_balance > 0).length} people</span>`, 'var(--mango)')}
+      ${kpi('Given in total', inr(sum(rows, a => a.amount)), `<span class="delta flat">${rows.length} advances</span>`, 'var(--navy)')}
+      ${kpi('Recovered so far', inr(sum(rows, a => a.amount) - sum(state.cache.emps, e => Math.max(0, e.advance_balance))), '<span class="delta flat">Through approved pay runs</span>', 'var(--leaf)')}</div>
+    <div class="panel"><div class="row" style="margin-bottom:10px"><h3 style="margin:0">Salary advances</h3><span class="spacer"></span>${can('payroll_approve') ? '<button class="btn berry" onclick="advanceModal()">Give an advance</button>' : ''}</div>
+    <p class="sub">Each new pay run suggests recovering the monthly instalment until the advance is cleared. You can change it in the pay run before approval.</p>
+    ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Employee</th><th>Given on</th><th>Reason</th><th style="text-align:right">Amount</th><th style="text-align:right">Recover per month</th><th style="text-align:right">Still owed (all their advances)</th></tr></thead><tbody>
+      ${rows.sort((a, b) => b.given_on.localeCompare(a.given_on)).map(a => `<tr><td><b>${esc(a.emp.name)}</b></td><td>${prettyDate(a.given_on)}</td><td class="small">${esc(a.reason || '—')}</td>
+        <td style="text-align:right">${inr(a.amount)}</td><td style="text-align:right">${inr(a.installment)}</td><td style="text-align:right" class="money">${a.emp.advance_balance > 0 ? inr(a.emp.advance_balance) : '<span class="pill ok">Cleared</span>'}</td></tr>`).join('')}
+      </tbody></table></div>` : emptyState('No advances given', '')}</div>`;
+}
+async function advanceModal() {
+  if (!state.cache.emps) { const { data } = await payRpc('list_employees', {}); state.cache.emps = data || []; }
+  openModal(`<h2>Give a salary advance</h2><p class="sub">Recorded in the books as money owed to you, and recovered from their pay each month.</p>
+    <div class="field"><label for="ad-emp">Employee</label><select class="input" id="ad-emp"><option value="">Pick someone</option>${state.cache.emps.filter(e => e.is_active).map(e => `<option value="${esc(e.id)}">${esc(e.name)}${e.advance_balance > 0 ? ` (owes ${inr(e.advance_balance)})` : ''}</option>`).join('')}</select></div>
+    <div class="grid g2" style="gap:10px"><div class="field"><label for="ad-amt">Amount</label><input class="input" id="ad-amt" type="number"></div>
+      <div class="field"><label for="ad-inst">Recover each month</label><input class="input" id="ad-inst" type="number"></div></div>
+    <div class="grid g2" style="gap:10px"><div class="field"><label for="ad-from">Paid from</label><select class="input" id="ad-from">${acctOptions(acctByKey('cash_drawer')?.id, a => a.is_bank, 'Pick the account')}</select></div>
+      <div class="field"><label for="ad-on">Given on</label><input class="input" id="ad-on" type="date" max="${todayIST()}" value="${todayIST()}"></div></div>
+    <div class="field"><label for="ad-why">Reason</label><input class="input" id="ad-why" placeholder="Medical, festival, family"></div>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" id="ad-go" onclick="saveAdvance()">Give advance</button></div>`);
+}
+async function saveAdvance() {
+  $('ad-go').disabled = true;
+  const { error } = await payRpc('give_advance', { p: { employee_id: $('ad-emp').value, amount: $('ad-amt').value, installment: $('ad-inst').value, from_account_id: $('ad-from').value, given_on: $('ad-on').value, reason: $('ad-why').value.trim() } });
+  if (error) { $('ad-go').disabled = false; return toast(error.message, 'err'); }
+  closeModal(); toast('Advance recorded', 'ok'); state.pay.tab = 'advances'; RENDER.payroll();
+}
+
+/* ---------- statutory rates (admin) ---------- */
+const PAY_RATES = [['pf_employee_pct', 'PF, employee share (%)', 12], ['pf_employer_pct', 'PF, employer share (%)', 12], ['pf_admin_pct', 'PF admin and EDLI, employer (%)', 1], ['pf_wage_ceiling', 'PF wage ceiling (₹ per month)', 15000],
+  ['esi_employee_pct', 'ESI, employee share (%)', 0.75], ['esi_employer_pct', 'ESI, employer share (%)', 3.25], ['esi_wage_ceiling', 'ESI applies up to gross pay of (₹)', 21000],
+  ['pt_slab1_upto', 'PT: nil up to gross pay of (₹)', 15000], ['pt_slab1_amount', 'PT in that band (₹)', 0], ['pt_slab2_upto', 'PT: next band up to (₹)', 20000], ['pt_slab2_amount', 'PT in that band (₹)', 150], ['pt_slab3_amount', 'PT above that (₹)', 200]];
+async function paySettings() {
+  await loadBooksBase(true); if (payStale('settings')) return;
+  const S = state.cache.acctSettings;
+  $('pay-body').innerHTML = `<div class="panel" style="max-width:760px"><h3>PF, ESI and professional tax</h3>
+    <p class="sub">Defaults are the 2026 rates: PF 12% + 12% on wages up to ₹15,000; ESI 0.75% + 3.25% when gross pay is ₹21,000 or less; Telangana PT nil up to ₹15,000, ₹150 up to ₹20,000, ₹200 above. Change them here if the government revises them. New and draft pay runs use the new rates; approved runs don't change.</p>
+    <div class="grid g3" style="gap:10px">${PAY_RATES.map(([k, l, d]) => `<div class="field"><label for="pr-${k}">${l}</label><input class="input" id="pr-${k}" type="number" step="0.01" value="${esc(S[k] ?? d)}"></div>`).join('')}</div>
+    <button class="btn berry" onclick="savePayRates()">Save rates</button>
+    <p class="small muted" style="margin-top:12px">To deposit PF, ESI or PT with the government, use Accounting, Journals, Spend money: paid from your bank, for "PF payable", "ESI payable" or "Professional tax payable".</p></div>`;
+}
+async function savePayRates() {
+  for (const [k] of PAY_RATES) { if (!(await saveBookSetting(k, $('pr-' + k).value.trim()))) return; }
+  toast('Rates saved. Recalculate draft pay runs by editing a line, or start a new run.', 'ok'); paySettings();
+}
+
+/* ---------- my payslips (anyone linked to an employee) ---------- */
+async function loadMyPayslips() {
+  const el = $('my-slips'); if (!el) return;
+  const { data, error } = await db.rpc('my_payslips', { p_staff_id: String(state.me.id), p_pin: state.pin });
+  if (error || !(data || []).length) { el.innerHTML = ''; return; }
+  state.cache.mySlips = data;
+  el.innerHTML = `<h3 style="margin:16px 0 8px">My payslips</h3>${data.map((l, i) => `<button class="bill-row" onclick="showPayslip(state.cache.mySlips[${i}], state.cache.mySlips[${i}].period)"><span class="bill-ic">🧾</span><span><b>${monthLabel(l.period)}</b><br><span class="small muted">${l.status === 'paid' ? 'Paid' : 'Approved, payment pending'}</span></span><b class="money">${inr(l.net_pay)}</b></button>`).join('')}`;
+}
+
+/* ---------- bills: categories and recurring bills ---------- */
+async function loadCategories() {
+  const { data, error } = await db.from('expense_categories').select('*').order('sort').order('label');
+  if (error || !(data || []).length) return;
+  state.cache.cats = data;
+  ALL_CATS = data.map(c => [c.key, c.emoji, c.label]);
+  EXPENSE_CATS = data.filter(c => c.is_active).map(c => [c.key, c.emoji, c.label]);
+  if (!EXPENSE_CATS.some(c => c[0] === state.bill.cat)) state.bill.cat = EXPENSE_CATS[0][0];
+}
+async function billCats(body) {
+  await Promise.all([loadCategories(), loadBooksBase()]);
+  body.innerHTML = `<div class="panel"><div class="row" style="margin-bottom:10px"><h3 style="margin:0">What bills can be for</h3><span class="spacer"></span><button class="btn berry" onclick="catModal()">+ Add category</button></div>
+    <p class="sub">These are the tiles the team picks when submitting a bill. Each one posts to an account in the books. Hidden categories stay on old bills.</p>
+    <div class="table-wrap"><table><tbody>${(state.cache.cats || []).map((c, i) => `<tr style="${c.is_active ? '' : 'opacity:.5'}"><td style="font-size:22px;width:40px">${esc(c.emoji)}</td><td><b>${esc(c.label)}</b>${c.is_active ? '' : ' <span class="pill">Hidden</span>'}</td>
+      <td class="small muted">Posts to ${esc(acctName(c.account_id))}</td><td style="text-align:right"><button class="btn ghost sm" onclick="catModal(${i})">Edit</button></td></tr>`).join('')}</tbody></table></div></div>`;
+}
+function catModal(i) {
+  const c = i == null ? { emoji: '🧾', is_active: true, sort: 500 } : state.cache.cats[i];
+  openModal(`<h2>${i == null ? 'Add a category' : 'Edit ' + esc(c.label)}</h2><p class="sub">Shown to the team as a tile on "New bill".</p>
+    <div class="grid g3" style="gap:10px"><div class="field"><label for="ct-emoji">Emoji</label><input class="input" id="ct-emoji" value="${esc(c.emoji)}" maxlength="4" style="font-size:22px;text-align:center"></div>
+      <div class="field span2"><label for="ct-label">Name</label><input class="input" id="ct-label" value="${esc(c.label || '')}" placeholder="Staff food"></div></div>
+    <div class="field"><label for="ct-acct">Posts to account</label><select class="input" id="ct-acct">${acctOptions(c.account_id, a => ['expense', 'liability', 'asset'].includes(a.type) && !a.is_bank, 'Pick an account')}</select></div>
+    <div class="field"><label for="ct-sort">Order (lower shows first)</label><input class="input" id="ct-sort" type="number" value="${esc(c.sort)}"></div>
+    ${i != null ? `<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="ct-hide" ${c.is_active ? '' : 'checked'} style="width:18px;height:18px;accent-color:var(--berry)"> Hide from new bills</label>` : ''}
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" onclick="saveCat(${i == null ? 'null' : `'${esc(c.key)}'`})">Save</button></div>`);
+}
+async function saveCat(key) {
+  const { error } = await db.rpc('save_expense_category', { p_admin_id: String(state.me.id), p_admin_pin: state.pin, p_key: key,
+    p: { label: $('ct-label').value.trim(), emoji: $('ct-emoji').value.trim(), account_id: $('ct-acct').value, sort: $('ct-sort').value, is_active: !($('ct-hide')?.checked) } });
+  if (error) return toast(error.message, 'err'); closeModal(); toast('Category saved', 'ok'); billCats($('bill-body'));
+}
+const FREQ = { monthly: 'Every month', quarterly: 'Every 3 months', yearly: 'Every year' };
+async function billRecurring(body) {
+  await Promise.all([loadBooksBase()]);
+  const { data } = await db.from('recurring_bills').select('*').order('next_date');
+  const ids = storeFilterIds(); state.cache.recur = (data || []).filter(b => ids.includes(String(b.store_id)));
+  const R = state.cache.recur, act = R.filter(b => b.is_active), due = act.filter(b => b.next_date <= todayIST());
+  body.innerHTML = `<div class="grid g3" style="margin-bottom:16px">
+      ${kpi('Recurring bills', act.length, `<span class="delta flat">${R.length - act.length} paused or ended</span>`, 'var(--navy)')}
+      ${kpi('Every month, roughly', inr(sum(act, b => b.amount / (b.frequency === 'monthly' ? 1 : b.frequency === 'quarterly' ? 3 : 12))), '<span class="delta flat">Fixed costs you can plan for</span>', 'var(--berry)')}
+      ${kpi('Due now', due.length, '<span class="delta flat">Created automatically at 6 AM each day</span>', 'var(--mango)')}</div>
+    <div class="panel"><div class="row" style="margin-bottom:10px"><h3 style="margin:0">Recurring bills</h3><span class="spacer"></span>
+      ${due.length ? '<button class="btn ghost" onclick="runRecurring()">Create due bills now</button>' : ''}<button class="btn berry" onclick="recurModal()">+ Add recurring bill</button></div>
+    <p class="sub">Rent, electricity, internet, EMIs. Each one creates a bill on its date, which then goes through approval and payment like any other. Bills whose amount changes go to the person you pick, to fill in the actual amount and attach the bill.</p>
+    ${R.length ? `<div class="table-wrap"><table><thead><tr><th>Bill</th><th>Outlet</th><th style="text-align:right">Amount</th><th>How often</th><th>Next bill</th><th></th></tr></thead><tbody>
+      ${R.map((b, i) => `<tr style="${b.is_active ? '' : 'opacity:.5'}"><td><b>${esc(catInfo(b.category)[1])} ${esc(b.name)}</b><div class="small muted">${esc(b.vendor || '')}${b.amount_varies ? `${b.vendor ? ', ' : ''}amount changes, filled by ${esc(state.loginStaff.find(s => sameId(s.id, b.owner_staff_id))?.name || 'someone')}` : ''}</div></td>
+        <td class="small">${esc(storeById(b.store_id)?.name || '')}</td><td style="text-align:right">${b.amount_varies ? '~' : ''}${inr(b.amount)}</td><td>${FREQ[b.frequency]}</td>
+        <td>${b.is_active ? `${prettyDate(b.next_date)}${b.next_date <= todayIST() ? ' <span class="pill low">Due</span>' : ''}` : '<span class="pill">Off</span>'}</td>
+        <td><button class="btn ghost sm" onclick="recurModal(${i})">Edit</button></td></tr>`).join('')}</tbody></table></div>` : emptyState('No recurring bills yet', 'Add rent, electricity, internet and EMIs once, and they turn up for approval every period.')}</div>`;
+}
+function recurModal(i) {
+  const b = i == null ? { frequency: 'monthly', next_date: todayIST(), payment_mode: 'Vendor to be paid', is_active: true, store_id: isAll() ? null : state.storeId, category: EXPENSE_CATS.find(c => c[0] === 'Rent')?.[0] || EXPENSE_CATS[0][0] } : state.cache.recur[i];
+  openModal(`<h2>${i == null ? 'Add a recurring bill' : 'Edit ' + esc(b.name)}</h2><p class="sub">Created as a bill on each date, then approved and paid like any other.</p>
+    <div class="grid g2" style="gap:10px"><div class="field"><label for="rb-name">Name</label><input class="input" id="rb-name" value="${esc(b.name || '')}" placeholder="Inorbit rent"></div>
+      <div class="field"><label for="rb-vendor">Paid to</label><input class="input" id="rb-vendor" value="${esc(b.vendor || '')}" placeholder="Inorbit Mall"></div></div>
+    <div class="grid g3" style="gap:10px"><div class="field"><label for="rb-store">Outlet</label><select class="input" id="rb-store">${storeOptions(b.store_id, { scoped: true })}</select></div>
+      <div class="field"><label for="rb-cat">What it's for</label><select class="input" id="rb-cat">${EXPENSE_CATS.map(([v, ic, l]) => `<option value="${esc(v)}" ${b.category === v ? 'selected' : ''}>${ic} ${l}</option>`).join('')}</select></div>
+      <div class="field"><label for="rb-amt">Amount (₹)</label><input class="input" id="rb-amt" type="number" value="${esc(b.amount || '')}"></div></div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:14px;margin-bottom:10px"><input type="checkbox" id="rb-varies" ${b.amount_varies ? 'checked' : ''} onchange="$('rb-owner-wrap').style.display=this.checked?'':'none'" style="width:18px;height:18px;accent-color:var(--berry)"> The amount changes each time (like electricity)</label>
+    <div class="field" id="rb-owner-wrap" style="${b.amount_varies ? '' : 'display:none'}"><label for="rb-owner">Who fills in the actual amount and attaches the bill</label><select class="input" id="rb-owner"><option value="">Pick someone</option>${state.loginStaff.map(s => `<option value="${esc(s.id)}" ${sameId(s.id, b.owner_staff_id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
+    <div class="grid g3" style="gap:10px"><div class="field"><label for="rb-freq">How often</label><select class="input" id="rb-freq">${Object.entries(FREQ).map(([k, l]) => `<option value="${k}" ${b.frequency === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="field"><label for="rb-next">Next bill on</label><input class="input" id="rb-next" type="date" value="${esc(b.next_date || '')}"></div>
+      <div class="field"><label for="rb-end">Stop after (optional)</label><input class="input" id="rb-end" type="date" value="${esc(b.end_date || '')}"></div></div>
+    <div class="field"><label for="rb-acct">Account (optional, for EMIs pick "Loans")</label><select class="input" id="rb-acct">${acctOptions(b.account_id, a => ['expense', 'liability', 'asset'].includes(a.type) && !a.is_bank, 'Default for the category')}</select></div>
+    ${i != null ? `<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="rb-off" ${b.is_active ? '' : 'checked'} style="width:18px;height:18px;accent-color:var(--berry)"> Paused</label>` : ''}
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" onclick="saveRecur(${i == null ? 'null' : `'${esc(b.id)}'`})">Save</button></div>`, true);
+}
+async function saveRecur(id) {
+  const { error } = await db.rpc('save_recurring_bill', { p_staff_id: String(state.me.id), p_pin: state.pin, p_id: id, p: {
+    name: $('rb-name').value.trim(), vendor: $('rb-vendor').value.trim(), store_id: $('rb-store').value, category: $('rb-cat').value, amount: $('rb-amt').value, amount_varies: $('rb-varies').checked,
+    owner_staff_id: $('rb-owner').value, frequency: $('rb-freq').value, next_date: $('rb-next').value, end_date: $('rb-end').value, account_id: $('rb-acct').value, is_active: !($('rb-off')?.checked) } });
+  if (error) return toast(error.message, 'err'); closeModal(); toast('Recurring bill saved', 'ok'); billRecurring($('bill-body'));
+}
+async function runRecurring() {
+  const { data, error } = await db.rpc('run_recurring_bills', { p_staff_id: String(state.me.id), p_pin: state.pin });
+  if (error) return toast(error.message, 'err'); toast(`${data} bill${data === 1 ? '' : 's'} created and sent for approval`, 'ok'); refreshBillBadge(); billRecurring($('bill-body'));
 }
 
 /* =========================================================
@@ -2745,7 +3119,7 @@ function drawUsers() {
         <div class="seg" style="flex:0 1 auto">${[['active', 'Active'], ['locked', 'Locked'], ['pin', 'Temp PIN'], ['inactive', 'Deactivated'], ['all', 'All']].map(([k, l]) => `<button class="${f.status === k ? 'on' : ''}" onclick="state.users.status='${k}';drawUsers()">${l}</button>`).join('')}</div>
         <span class="spacer"></span><button class="btn ghost sm" onclick="exportUsers()">Download</button><button class="btn berry" onclick="userModal()">+ Add user</button>
       </div>
-      <div class="chips" style="margin-bottom:8px">${[['all', 'Everyone'], ['admin', 'Admins'], ['Barista', 'Baristas'], ['Store manager', 'Store managers'], ['Finance', 'Finance'], ['Approver', 'Approvers'], ['Accountant', 'Accountants'], ['Custom access', 'Custom']].map(([k, l]) => `<button class="chip ${f.role === k ? 'on' : ''}" onclick="state.users.role='${esc(k)}';drawUsers()">${l}</button>`).join('')}</div>
+      <div class="chips" style="margin-bottom:8px">${[['all', 'Everyone'], ['admin', 'Admins'], ['Barista', 'Baristas'], ['Store manager', 'Store managers'], ['Finance', 'Finance'], ['Approver', 'Approvers'], ['Accountant', 'Accountants'], ['Payroll', 'Payroll'], ['Custom access', 'Custom']].map(([k, l]) => `<button class="chip ${f.role === k ? 'on' : ''}" onclick="state.users.role='${esc(k)}';drawUsers()">${l}</button>`).join('')}</div>
       ${list.length ? `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Access</th><th>Outlets</th><th>Last sign-in</th><th>Status</th><th></th></tr></thead><tbody>
       ${list.map(s => { const i = all.indexOf(s), [st, cls] = userStatus(s); return `<tr style="${s.active ? '' : 'opacity:.55'}">
         <td><div class="row" style="flex-wrap:nowrap"><span style="width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px;flex-shrink:0;background:${colorFor(s.name)}">${esc(initials(s.name))}</span>
@@ -2866,7 +3240,7 @@ async function userTab(t, i) {
     ]);
     const live = orders.filter(o => o.status !== 'void');
     const VERB = { submitted: 'Submitted a bill', approve: 'Approved a bill', reject: 'Rejected a bill', send_back: 'Sent back a bill', resubmitted: 'Resubmitted a bill', paid: 'Paid a bill', withdrawn: 'Withdrew a bill', admin_override: 'Overrode a bill status', imported: 'Bill logged before approvals' };
-    const AV = { access_changed: 'Access changed', staff_created: 'Account created', staff_deactivated: 'Deactivated', staff_reactivated: 'Reactivated', pin_reset: 'PIN reset by admin', pin_changed: 'Changed own PIN', staff_unlocked: 'Unlocked', profile_changed: 'Profile edited' };
+    const AV = { employee_saved: 'Payroll details saved', advance_given: 'Salary advance given', access_changed: 'Access changed', staff_created: 'Account created', staff_deactivated: 'Deactivated', staff_reactivated: 'Reactivated', pin_reset: 'PIN reset by admin', pin_changed: 'Changed own PIN', staff_unlocked: 'Unlocked', profile_changed: 'Profile edited' };
     $('um-activity').innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:16px">${miniStat('Orders, last 30 days', live.length)}${miniStat('Sales handled', inr(sum(live, o => o.total_amount)))}${miniStat('Bill actions', (evs || []).length)}</div>
       <div class="grid g2" style="gap:16px;align-items:start">
         <div><h3 style="margin-bottom:8px">Bills</h3>${(evs || []).length ? `<div class="timeline">${evs.map(v => `<div class="ev"><b>${VERB[v.action] || esc(v.action)}</b>${v.expenses ? `, ${inr(v.expenses.amount)} ${esc(v.expenses.vendor || '')}` : ''}<div class="small muted">${fmtDT(v.created_at)}</div>${v.note ? `<div class="small">"${esc(v.note)}"</div>` : ''}</div>`).join('')}</div>` : emptyState('No bill activity', '')}</div>
@@ -2933,11 +3307,12 @@ function myAccountModal(force = false) {
     ${force ? '' : `<div class="fb-card"><div class="small muted">Your outlets</div><b>${esc(storesText({ ...me, store_ids: me.store_ids || [] }, 99))}</b>
       <div class="small muted" style="margin-top:10px">What you can do</div><div class="small">${isAdmin() ? 'Everything (admin)' : (me.permissions || []).map(p => esc(permName[p] || p)).join(', ')}</div>
       ${can('expense_approve') && !isAdmin() ? `<div class="small muted" style="margin-top:10px">You can approve bills up to</div><b>${me.approval_limit != null ? inr(me.approval_limit) : 'any amount'}</b>` : ''}</div>
+      <div id="my-slips"></div>
       <h3 style="margin:16px 0 8px">Change your PIN</h3>`}
     <div class="grid g2" style="gap:10px">${pinField('mp-new', 'New PIN')}${pinField('mp-new2', 'Type it again')}</div>
     <p class="small muted">Easy PINs like 1234 or 1111 aren't allowed.</p>
     <div class="modal-actions">${force ? '<button class="btn ghost" onclick="logout()">Sign out</button>' : '<button class="btn ghost" onclick="closeModal()">Close</button>'}<button class="btn berry" id="mp-go" onclick="saveMyPin(${force})">Save new PIN</button></div>`);
-  if (force) { const bd = document.querySelector('#modal-root .backdrop'); bd.removeAttribute('onclick'); bd.onclick = null; }
+  if (force) { const bd = document.querySelector('#modal-root .backdrop'); bd.removeAttribute('onclick'); bd.onclick = null; } else loadMyPayslips();
 }
 async function saveMyPin(force) {
   const a = $('mp-new').value.trim(), b = $('mp-new2').value.trim();
@@ -3032,8 +3407,9 @@ function makeDemoClient() {
     { id: 'u6', name: 'Kiran Goud', role: 'barista', store_id: 's1', active: false },
     { id: 'u7', name: 'Event Crew Deepa', role: 'barista', store_id: 'e2', active: true },
     { id: 'u8', name: 'Manoj Kumar', role: 'barista', store_id: 's1', active: true, permissions: ['pos', 'sales_view', 'void_bills', 'expense_submit', 'expense_approve', 'reports', 'menu', 'stock'], approval_limit: 5000 },
-    { id: 'u9', name: 'Ananya Rao', role: 'barista', store_id: null, active: true, permissions: ['expense_submit', 'expense_view_all', 'expense_approve', 'expense_pay', 'reports', 'accounting_view'], approval_limit: null },
-    { id: 'u10', name: 'Kavya Iyer', role: 'barista', store_id: null, active: true, permissions: ['accounting', 'accounting_view', 'expense_view_all', 'reports'], approval_limit: null }
+    { id: 'u9', name: 'Ananya Rao', role: 'barista', store_id: null, active: true, permissions: ['expense_submit', 'expense_view_all', 'expense_approve', 'expense_pay', 'reports', 'accounting_view', 'payroll_approve'], approval_limit: null },
+    { id: 'u10', name: 'Kavya Iyer', role: 'barista', store_id: null, active: true, permissions: ['accounting', 'accounting_view', 'expense_view_all', 'reports'], approval_limit: null },
+    { id: 'u11', name: 'Suma (Payroll)', role: 'barista', store_id: null, active: true, permissions: ['payroll', 'reports'], approval_limit: null }
   ];
   T.staff.forEach(s => { if (!s.permissions) s.permissions = s.role === 'admin' ? [] : ['pos', 'sales_view', 'expense_submit']; if (s.approval_limit === undefined) s.approval_limit = null; });
   // Users: outlets, phones, sign-ins. Priya works at two outlets, Ananya at all of them.
@@ -3042,7 +3418,7 @@ function makeDemoClient() {
     const assign = { u2: ['s1'], u3: ['s1', 's2'], u4: ['s2'], u5: ['s2'], u6: ['s1'], u7: ['e2'], u8: ['s1'] };
     const phones = ['9848012345', '9849023456', '9701034567', '9866045678', '9912056789', '9440067890', '9959078901', '9885089012', '9030090123'];
     T.staff.forEach((s, k) => {
-      s.all_stores = s.role === 'admin' || s.id === 'u9' || s.id === 'u10';
+      s.all_stores = s.role === 'admin' || ['u9', 'u10', 'u11'].includes(s.id);
       (assign[s.id] || []).forEach(id => T.staff_stores.push({ staff_id: s.id, store_id: id }));
       s.store_id = s.all_stores ? null : (assign[s.id] || [])[0] || null;
       Object.assign(s, { phone: phones[k] || null, notes: null, must_change_pin: s.id === 'u4', failed_pin_attempts: 0,
@@ -3191,7 +3567,7 @@ function makeDemoClient() {
       add('s' + o.id, ist(o.created_at).date, 'Sale ' + o.receipt_no, 'sale', o.id, [{ account_id: A(o.payment_method === 'UPI' ? 'upi_clearing' : o.payment_method === 'CARD' ? 'card_clearing' : 'cash_drawer'), store_id: o.store_id, debit: tot, description: 'Paid by ' + o.payment_method },
         { account_id: A('discounts'), store_id: o.store_id, debit: dis }, { account_id: A('sales'), store_id: o.store_id, credit: tot + dis - tax }, { account_id: A('gst_output'), store_id: o.store_id, credit: tax }]); });
     T.expenses.forEach(e => { if (!['approved', 'paid'].includes(e.status)) return; const date = e.bill_date || ist(e.created_at).date, who = e.vendor || e.category;
-      const ea = e.account_id || (T.accounts.find(a => a.category_key === e.category) || {}).id || A('exp_misc'), liab = A(/personal/i.test(e.payment_mode || '') ? 'staff_payable' : 'ap'), g = Math.min(+e.gst_amount || 0, +e.amount);
+      const ea = e.account_id || (T.expense_categories.find(c => c.key === e.category) || {}).account_id || (T.accounts.find(a => a.category_key === e.category) || {}).id || A('exp_misc'), liab = A(/personal/i.test(e.payment_mode || '') ? 'staff_payable' : 'ap'), g = Math.min(+e.gst_amount || 0, +e.amount);
       add('b' + e.id, date, 'Bill: ' + who + (e.invoice_no ? ' #' + e.invoice_no : ''), 'bill', e.id, [{ account_id: ea, store_id: e.store_id, debit: e.amount - g, description: who }, { account_id: A('gst_input'), store_id: e.store_id, debit: g }, { account_id: liab, store_id: e.store_id, credit: e.amount }]);
       if (e.status === 'paid') { const from = e.paid_from_account_id || A(/^counter cash|^cash \(counter/i.test(e.paid_method || '') ? 'cash_drawer' : e.paid_method === 'Cash' ? 'petty_cash' : 'bank');
         add('p' + e.id, e.paid_on || date, 'Payment: ' + who, 'bill_payment', e.id, [{ account_id: liab, store_id: e.store_id, debit: e.amount }, { account_id: from, store_id: e.store_id, credit: e.amount, description: (e.paid_method || '') + (e.paid_reference ? ', ref ' + e.paid_reference : '') }]); } });
@@ -3208,6 +3584,70 @@ function makeDemoClient() {
     T.bank_lines.push({ id: nid('bl'), account_id: A('bank'), txn_date: addDays(today, -2), description: 'MDR CHARGES INCL GST', reference: '', amount: -236, status: 'new' });
     T.bank_lines.sort((a, b) => b.txn_date.localeCompare(a.txn_date));
   }
+  // ---------- Payroll, categories and recurring bills in the sample data ----------
+  T.accounts.push(...[['1700','Staff advances','asset','current_asset','staff_advances'],['2210','PF payable','liability','tax','pf_payable'],['2220','ESI payable','liability','tax','esi_payable'],
+    ['2230','Professional tax payable','liability','tax','pt_payable'],['6015','Employer PF and ESI','expense','operating','employer_contrib']]
+    .map(([code, name, type, subtype, system_key]) => ({ id: 'a' + code, code, name, type, subtype, system_key, category_key: null, is_bank: false, is_active: true })));
+  T.accounts.find(a => a.code === '2200').system_key = 'salary_payable'; T.accounts.find(a => a.code === '6010').system_key = 'salaries'; T.accounts.find(a => a.code === '4500').system_key = 'other_income';
+  T.accounts.sort((p, q) => p.code.localeCompare(q.code));
+  T.accounting_settings.push(...Object.entries({ pf_employee_pct: '12', pf_employer_pct: '12', pf_admin_pct: '1', pf_wage_ceiling: '15000', esi_employee_pct: '0.75', esi_employer_pct: '3.25', esi_wage_ceiling: '21000',
+    pt_slab1_upto: '15000', pt_slab1_amount: '0', pt_slab2_upto: '20000', pt_slab2_amount: '150', pt_slab3_amount: '200' }).map(([key, value]) => ({ key, value })));
+  T.expense_categories = [['Produce & Fruits','Fruits & produce','🍊','5000',10],['Dairy, Ice & Boosters','Dairy, ice, boosters','🧊','5010',20],['Packaging & Straws','Cups & packaging','🥤','5020',30],
+    ['Repairs & Kitchen Maintenance','Repairs','🔧','6030',40],['Store Utilities & Logistics','Utilities & transport','🚚','6020',50],['Rent','Rent','🏠','6000',60],['Electricity & Water','Electricity & water','💡','6020',70],
+    ['Internet & Phone','Internet & phone','📶','6020',80],['Marketing & Printing','Marketing & printing','📣','6040',90],['Event Stall Fees','Event stall fees','🎪','6060',100],['Loan EMI','Loan EMI','🏦','2300',110],['Other Misc','Other','🧾','6900',999]]
+    .map(([key, label, emoji, code, sort]) => ({ key, label, emoji, account_id: 'a' + code, is_active: true, sort }));
+  const NS = (k, d) => { const v = (T.accounting_settings.find(x => x.key === k) || {}).value; return v === undefined || v === '' ? d : +v; };
+  T.employees = [
+    ['Ravi Teja','u2','Barista','s1','monthly',16000,0,true,true,true],['Priya Reddy','u3','Senior barista','s1','monthly',19000,0,true,true,true],['Manoj Kumar','u8','Store manager','s1','monthly',32000,0,true,false,true],
+    ['Imran Khan','u4','Barista','s2','monthly',15500,0,true,true,true],['Neha Varma','u5','Barista','s2','monthly',15500,0,false,true,true],['Lakshmi (helper)',null,'Kitchen helper','s1','daily',0,550,false,false,false],
+    ['Raju (helper)',null,'Fruit cutting','s2','daily',0,500,false,false,false],['Event Crew Deepa','u7','Event staff','e2','daily',0,700,false,false,false]
+  ].map(([name, staff_id, designation, store_id, pay_type, monthly_salary, daily_rate, pf_on, esi_on, pt_on], k) => ({ id: 'em' + k, name, staff_id, designation, store_id, pay_type, monthly_salary, daily_rate, pf_on, esi_on, pt_on,
+    uan: pf_on ? '1012' + String(34567800 + k) : null, esi_no: esi_on ? '31' + String(12345670 + k) : null, pay_method: pay_type === 'daily' ? 'Cash' : 'Bank transfer', pay_details: pay_type === 'daily' ? null : 'HDFC ****' + (4210 + k), join_date: '2026-04-01', is_active: true }));
+  T.salary_advances = []; T.payroll_runs = []; T.payroll_lines = [];
+  const advBal = (empId, exceptRun) => sum(T.salary_advances.filter(a => a.employee_id === empId), a => a.amount) -
+    sum(T.payroll_lines.filter(l => l.employee_id === empId && l.run_id !== exceptRun && ['approved', 'paid'].includes((T.payroll_runs.find(r => r.id === l.run_id) || {}).status)), l => l.advance_recovery);
+  const calcLine = l => { const e = T.employees.find(x => x.id === l.employee_id), units = Math.min((+l.days_worked || 0) + (+l.paid_leave || 0), l.days_in_month);
+    const earned = Math.round(l.pay_type === 'monthly' ? l.rate * units / l.days_in_month : l.rate * units), gross = earned + (+l.incentive || 0);
+    let pfw = 0, pf = 0, pfe = 0, esi = 0, esie = 0, pt = 0;
+    if (e.pf_on) { pfw = Math.min(earned, NS('pf_wage_ceiling', 15000)); pf = Math.round(pfw * NS('pf_employee_pct', 12) / 100); pfe = Math.round(pfw * (NS('pf_employer_pct', 12) + NS('pf_admin_pct', 1)) / 100); }
+    if (e.esi_on && gross > 0 && gross <= NS('esi_wage_ceiling', 21000)) { esi = Math.ceil(gross * NS('esi_employee_pct', .75) / 100); esie = Math.ceil(gross * NS('esi_employer_pct', 3.25) / 100); }
+    if (e.pt_on && gross > 0) pt = gross <= NS('pt_slab1_upto', 15000) ? NS('pt_slab1_amount', 0) : gross <= NS('pt_slab2_upto', 20000) ? NS('pt_slab2_amount', 150) : NS('pt_slab3_amount', 200);
+    const adv = Math.min(Math.max(+l.advance_recovery || 0, 0), Math.max(advBal(l.employee_id, l.run_id), 0), Math.max(gross - pf - esi - pt - (+l.other_deduction || 0), 0));
+    const net = gross - pf - esi - pt - (+l.other_deduction || 0) - adv; if (net < 0) throw new Error(`Deductions for ${e.name} come to more than their pay this month. Lower the other deductions.`);
+    Object.assign(l, { earned, gross, pf_wage: pfw, pf_employee: pf, pf_employer: pfe, esi_employee: esi, esi_employer: esie, pt, advance_recovery: adv, net_pay: net }); };
+  const newRun = (period, by, storeIds) => { const r = { id: nid('pr'), period, status: 'draft', created_by: by.name, created_by_id: by.id, created_at: new Date().toISOString() }; T.payroll_runs.push(r);
+    const start = period + '-01', dim = new Date(+period.slice(0, 4), +period.slice(5, 7), 0).getDate();
+    T.employees.filter(e => e.is_active && (!storeIds || storeIds.map(String).includes(String(e.store_id))) && !T.payroll_lines.some(l => l.employee_id === e.id && (T.payroll_runs.find(x => x.id === l.run_id) || {}).period === period && T.payroll_runs.find(x => x.id === l.run_id).status !== 'cancelled'))
+      .forEach(e => { const l = { id: nid('pl'), run_id: r.id, employee_id: e.id, store_id: e.store_id, pay_type: e.pay_type, rate: e.pay_type === 'monthly' ? e.monthly_salary : e.daily_rate, days_in_month: dim,
+        days_worked: e.pay_type === 'monthly' ? dim : 0, paid_leave: 0, incentive: 0, other_deduction: 0, advance_recovery: sum(T.salary_advances.filter(a => a.employee_id === e.id), a => a.installment), status: 'pending' }; T.payroll_lines.push(l); calcLine(l); });
+    if (!T.payroll_lines.some(l => l.run_id === r.id)) { T.payroll_runs.pop(); throw new Error('Everyone you can see is already in a pay run for this month, or there are no active employees'); }
+    return r; };
+  const byStore = (lines, f) => Object.entries(lines.reduce((m, l) => { m[l.store_id] = (m[l.store_id] || 0) + f(l); return m; }, {}));
+  const approveRun = (r, by) => { const L = T.payroll_lines.filter(l => l.run_id === r.id), last = new Date(+r.period.slice(0, 4), +r.period.slice(5, 7), 0), d = [last.getFullYear(), String(last.getMonth() + 1).padStart(2, '0'), String(last.getDate()).padStart(2, '0')].join('-');
+    const lines = [...byStore(L, l => l.gross).map(([s, v]) => ({ account_id: A('salaries'), store_id: s, debit: v, description: 'Salaries and wages' })), ...byStore(L, l => l.pf_employer + l.esi_employer).map(([s, v]) => ({ account_id: A('employer_contrib'), store_id: s, debit: v })),
+      ...byStore(L, l => l.net_pay).map(([s, v]) => ({ account_id: A('salary_payable'), store_id: s, credit: v })), ...byStore(L, l => l.pf_employee + l.pf_employer).map(([s, v]) => ({ account_id: A('pf_payable'), store_id: s, credit: v })),
+      ...byStore(L, l => l.esi_employee + l.esi_employer).map(([s, v]) => ({ account_id: A('esi_payable'), store_id: s, credit: v })), ...byStore(L, l => l.pt).map(([s, v]) => ({ account_id: A('pt_payable'), store_id: s, credit: v })),
+      ...byStore(L, l => l.advance_recovery).map(([s, v]) => ({ account_id: A('staff_advances'), store_id: s, credit: v })), ...byStore(L, l => +l.other_deduction || 0).map(([s, v]) => ({ account_id: A('other_income'), store_id: s, credit: v }))];
+    mjAdd(d < todayIST() ? d : todayIST(), 'Payroll for ' + monthLabel(r.period), null, 'payroll', r.id, lines, by.name); Object.assign(r, { status: 'approved', approved_by: by.name, approved_by_id: by.id }); };
+  const payLines = (r, L, p, by) => { mjAdd(p.paid_on || todayIST(), `Salary payment, ${monthLabel(r.period)} (${L.length} people)`, p.reference || null, 'payroll_payment', r.id,
+      [...byStore(L, l => l.net_pay).map(([s, v]) => ({ account_id: A('salary_payable'), store_id: s, debit: v })), ...byStore(L, l => l.net_pay).map(([s, v]) => ({ account_id: p.from_account_id, store_id: s, credit: v }))], by.name);
+    L.forEach(l => Object.assign(l, { status: 'paid', paid_on: p.paid_on || todayIST(), paid_method: p.method, paid_reference: p.reference || null, paid_by: by.name }));
+    if (!T.payroll_lines.some(l => l.run_id === r.id && l.status === 'pending' && l.net_pay > 0)) r.status = 'paid'; };
+  {
+    const sai = T.staff.find(s => s.id === 'u1'), ana = T.staff.find(s => s.id === 'u9');
+    T.salary_advances.push({ id: nid('ad'), employee_id: 'em3', given_on: addDays(today, -40), amount: 6000, installment: 2000, reason: 'Family function', paid_from_account_id: A('cash_drawer'), created_by: 'Sai Kumar' });
+    mjAdd(addDays(today, -40), 'Salary advance to Imran Khan', null, 'advance', null, [{ account_id: A('staff_advances'), store_id: 's2', debit: 6000 }, { account_id: A('cash_drawer'), store_id: 's2', credit: 6000 }], 'Sai Kumar');
+    const lastP = addDays(today.slice(0, 8) + '01', -1).slice(0, 7), r = newRun(lastP, ana, null);
+    T.payroll_lines.filter(l => l.run_id === r.id).forEach((l, k) => { if (l.pay_type === 'daily') l.days_worked = 24 + (k % 3); if (k === 1) l.incentive = 1000; if (k === 0) l.days_worked -= 2; calcLine(l); });
+    approveRun(r, sai); payLines(r, T.payroll_lines.filter(l => l.run_id === r.id), { method: 'Bank transfer', reference: 'NEFT-BULK-' + lastP.replace('-', ''), from_account_id: A('bank'), paid_on: addDays(today.slice(0, 8) + '01', 1) }, sai);
+    const cur = newRun(today.slice(0, 7), ana, null);
+    T.payroll_lines.filter(l => l.run_id === cur.id && l.pay_type === 'daily').forEach(l => { l.days_worked = Math.min(20, +today.slice(8)); calcLine(l); });
+  }
+  T.recurring_bills = [
+    { id: nid('rb'), name: 'Inorbit kiosk rent', store_id: 's1', category: 'Rent', vendor: 'Inorbit Mall', amount: 45000, amount_varies: false, frequency: 'monthly', next_date: addDays(today.slice(0, 8) + '01', 31).slice(0, 8) + '01', payment_mode: 'Vendor to be paid', is_active: true },
+    { id: nid('rb'), name: 'Jubilee Hills electricity', store_id: 's2', category: 'Electricity & Water', vendor: 'TSSPDCL', amount: 6500, amount_varies: true, owner_staff_id: 'u4', frequency: 'monthly', next_date: today, payment_mode: 'Vendor to be paid', is_active: true },
+    { id: nid('rb'), name: 'Airtel broadband (both outlets)', store_id: 's1', category: 'Internet & Phone', vendor: 'Airtel', amount: 1178, amount_varies: false, frequency: 'monthly', next_date: addDays(today, 6), payment_mode: 'Vendor to be paid', is_active: true },
+    { id: nid('rb'), name: 'Blender loan EMI', store_id: 's1', category: 'Loan EMI', vendor: 'Bajaj Finance', amount: 8400, amount_varies: false, frequency: 'monthly', next_date: addDays(today, 12), end_date: addDays(today, 300), payment_mode: 'Vendor to be paid', account_id: 'a2300', is_active: true }];
   // Two accidental repeat bills today at the first outlet, like a retry on slow internet.
   T.orders.filter(o => o.store_id === 's1' && o.created_at.slice(0, 10) >= addDays(today, -1) && T.order_items.filter(i => i.order_id === o.id).length >= 2).slice(-2).forEach(o => {
     const copy = { ...o, id: nid('o'), receipt_no: 'BTJ-' + (rc++), created_at: new Date(Date.parse(o.created_at) + 38000).toISOString() };
@@ -3301,7 +3741,7 @@ function makeDemoClient() {
       const validate = (s, b) => {
         if (!b.store_id) throw new Error('Pick the outlet or event this bill is for');
         if (!scope(s, b.store_id)) throw new Error('You can only submit bills for your own outlet or its events');
-        if (!b.category) throw new Error('Pick what the bill was for');
+        if (!b.category || !T.expense_categories.some(c => c.key === b.category && c.is_active)) throw new Error('Pick what the bill was for');
         if (!(Number(b.amount) > 0)) throw new Error('Enter the bill amount');
         if (b.bill_date && b.bill_date > todayIST()) throw new Error("The bill date can't be in the future");
         if (Number(b.amount) > 200 && !b.receipt_url) throw new Error('A photo of the bill is needed for amounts above ₹200');
@@ -3444,6 +3884,71 @@ function makeDemoClient() {
         logE(e, 'admin_edit', old.status, e.status, s, a.p_reason, { old_amount: old.amount, new_amount: e.amount }); audit(s, 'bill_edited', 'expense', e.id, { reason: a.p_reason }); return { data: e, error: null }; }
       if (fn === 'recode_expense') { const s = needBooks(a.p_staff_id, a.p_pin), e = bill(a.p_expense_id); if (+a.p_gst_amount < 0 || +a.p_gst_amount > e.amount) throw new Error('GST must be between 0 and the bill amount');
         e.account_id = a.p_account_id || null; e.gst_amount = +a.p_gst_amount || 0; logE(e, 'recoded', e.status, e.status, s, a.p_note); return { data: e, error: null }; }
+      const needP = (id, pin, perms) => { const s = check(id, pin); if (s.role !== 'admin' && !perms.some(p => (s.permissions || []).includes(p))) throw new Error("You don't have access to do this"); return s; };
+      const emp = id => { const e = T.employees.find(x => sameId(x.id, id)); if (!e) throw new Error('Employee not found'); return e; };
+      const run = id => { const r = T.payroll_runs.find(x => sameId(x.id, id)); if (!r) throw new Error('Pay run not found'); return r; };
+      if (fn === 'list_employees') { const s = needP(a.p_staff_id, a.p_pin, ['payroll', 'payroll_approve']);
+        return { data: T.employees.filter(e => scope(s, e.store_id)).map(e => ({ ...e, advance_balance: advBal(e.id, null), staff_name: (T.staff.find(x => x.id === e.staff_id) || {}).name || null, advances: T.salary_advances.filter(x => x.employee_id === e.id) }))
+          .sort((p, q) => (q.is_active - p.is_active) || p.name.localeCompare(q.name)), error: null }; }
+      if (fn === 'save_employee') { const s = needP(a.p_staff_id, a.p_pin, ['payroll']), p = a.p_p || a.p;
+        if (!p.name) throw new Error('Add their name'); if (p.pay_type === 'monthly' && !(+p.monthly_salary > 0)) throw new Error('Enter their monthly salary'); if (p.pay_type === 'daily' && !(+p.daily_rate > 0)) throw new Error('Enter their daily wage');
+        if (!p.store_id) throw new Error('Pick the outlet their salary is charged to');
+        const row = { ...p, monthly_salary: +p.monthly_salary || 0, daily_rate: +p.daily_rate || 0, staff_id: p.staff_id || null, join_date: p.join_date || null };
+        if (a.p_id) Object.assign(emp(a.p_id), row); else T.employees.push({ id: nid('em'), ...row, is_active: true }); audit(s, 'employee_saved', 'employee', a.p_id, { name: p.name }); return { data: row, error: null }; }
+      if (fn === 'give_advance') { const s = needP(a.p_staff_id, a.p_pin, ['payroll_approve']), p = a.p, e = emp(p.employee_id);
+        if (!(+p.amount > 0)) throw new Error('Enter the advance amount'); if (!(+p.installment > 0)) throw new Error('Enter how much to recover each month'); if (!p.from_account_id) throw new Error('Pick the bank or cash account it was paid from');
+        lockOk(p.given_on || todayIST()); const ad = { id: nid('ad'), employee_id: e.id, given_on: p.given_on || todayIST(), amount: +p.amount, installment: Math.min(+p.installment, +p.amount), reason: p.reason, paid_from_account_id: p.from_account_id, created_by: s.name };
+        T.salary_advances.push(ad); mjAdd(ad.given_on, 'Salary advance to ' + e.name, null, 'advance', ad.id, [{ account_id: A('staff_advances'), store_id: e.store_id, debit: ad.amount }, { account_id: p.from_account_id, store_id: e.store_id, credit: ad.amount }], s.name);
+        return { data: ad, error: null }; }
+      if (fn === 'create_payroll_run') { const s = needP(a.p_staff_id, a.p_pin, ['payroll']); if (!/^\d{4}-\d{2}$/.test(a.p_period || '')) throw new Error('Pick the month'); if (a.p_period > todayIST().slice(0, 7)) throw new Error("You can't run payroll for a future month");
+        return { data: newRun(a.p_period, s, a.p_store_ids), error: null }; }
+      if (fn === 'update_payroll_line') { needP(a.p_staff_id, a.p_pin, ['payroll']); const l = T.payroll_lines.find(x => sameId(x.id, a.p_line_id)), r = run(l.run_id), p = a.p;
+        if (r.status !== 'draft') throw new Error("This pay run is already approved, so it can't change");
+        if (+p.days_worked < 0 || +p.days_worked > l.days_in_month) throw new Error(`Days worked must be between 0 and ${l.days_in_month}`);
+        if ((+p.days_worked || 0) + (+p.paid_leave || 0) > l.days_in_month) throw new Error(`Days worked plus paid leave can't be more than ${l.days_in_month} days`);
+        const old = { ...l }; Object.assign(l, { days_worked: +p.days_worked || 0, paid_leave: +p.paid_leave || 0, incentive: +p.incentive || 0, other_deduction: +p.other_deduction || 0, advance_recovery: +p.advance_recovery || 0 });
+        try { calcLine(l); } catch (err) { Object.assign(l, old); throw err; } return { data: l, error: null }; }
+      if (fn === 'get_payroll') { const s = needP(a.p_staff_id, a.p_pin, ['payroll', 'payroll_approve']);
+        if (!a.p_run_id) return { data: T.payroll_runs.map(r => { const L = T.payroll_lines.filter(l => l.run_id === r.id && scope(s, l.store_id));
+          return { ...r, people: L.length, gross: sum(L, l => l.gross), net: sum(L, l => l.net_pay), employer: sum(L, l => l.pf_employer + l.esi_employer), paid: sum(L.filter(l => l.status === 'paid'), l => l.net_pay) }; }).sort((p, q) => q.period.localeCompare(p.period)), error: null };
+        const r = run(a.p_run_id); return { data: { ...r, lines: T.payroll_lines.filter(l => l.run_id === r.id && scope(s, l.store_id)).map(l => { const e = emp(l.employee_id);
+          return { ...l, name: e.name, designation: e.designation, pay_method: e.pay_method, pay_details: e.pay_details, uan: e.uan, esi_no: e.esi_no, staff_id: e.staff_id, advance_balance: advBal(e.id, r.id) }; }).sort((p, q) => p.name.localeCompare(q.name)) }, error: null }; }
+      if (fn === 'approve_payroll_run') { const s = needP(a.p_staff_id, a.p_pin, ['payroll_approve']), r = run(a.p_run_id);
+        if (r.status !== 'draft') throw new Error('This pay run is already ' + r.status); if (s.role !== 'admin' && r.created_by_id === s.id) throw new Error('You prepared this pay run, so someone else has to approve it');
+        if (s.role !== 'admin' && T.payroll_lines.some(l => l.run_id === r.id && emp(l.employee_id).staff_id === s.id)) throw new Error('Your own salary is in this run, so someone else has to approve it');
+        approveRun(r, s); return { data: r, error: null }; }
+      if (fn === 'pay_payroll') { const s = needP(a.p_staff_id, a.p_pin, ['payroll_approve']), r = run(a.p_run_id), p = a.p; if (r.status !== 'approved') throw new Error('Only approved pay runs can be paid');
+        if (['Bank transfer', 'UPI', 'Cheque'].includes(p.method) && !p.reference) throw new Error('Add the UTR, UPI or cheque reference'); if (!p.from_account_id) throw new Error('Pick the bank or cash account it was paid from');
+        const L = T.payroll_lines.filter(l => l.run_id === r.id && l.status === 'pending' && l.net_pay > 0 && (!a.p_line_ids || a.p_line_ids.map(String).includes(String(l.id))));
+        if (!L.length) throw new Error('Nothing left to pay in this selection'); if (s.role !== 'admin' && L.some(l => emp(l.employee_id).staff_id === s.id)) throw new Error("You can't record your own salary payment. Someone else has to.");
+        lockOk(p.paid_on || todayIST()); payLines(r, L, p, s); return { data: { paid: L.length }, error: null }; }
+      if (fn === 'reopen_payroll_run') { const s = needP(a.p_staff_id, a.p_pin, ['payroll']), r = run(a.p_run_id); if (!a.p_reason) throw new Error('Add a reason');
+        if (r.status === 'approved') { if (s.role !== 'admin') throw new Error('Only an admin can reopen an approved pay run');
+          if (T.payroll_lines.some(l => l.run_id === r.id && l.status === 'paid' && l.net_pay > 0)) throw new Error("Some salaries in this run are already paid, so it can't be reopened");
+          T.manual.filter(m => m.j.source_type === 'payroll' && m.j.source_id === r.id && m.j.status === 'posted').forEach(m => { lockOk(m.j.entry_date); m.j.status = 'void'; }); r.status = a.p_cancel ? 'cancelled' : 'draft'; }
+        else if (r.status === 'draft') { if (!a.p_cancel) throw new Error('This run is already a draft'); r.status = 'cancelled'; } else throw new Error(`A ${r.status} pay run can't be changed`);
+        return { data: null, error: null }; }
+      if (fn === 'my_payslips') { const s = check(a.p_staff_id, a.p_pin);
+        return { data: T.payroll_lines.filter(l => emp(l.employee_id).staff_id === s.id && ['approved', 'paid'].includes(run(l.run_id).status)).map(l => { const e = emp(l.employee_id), r = run(l.run_id);
+          return { ...l, period: r.period, run_status: r.status, name: e.name, designation: e.designation, uan: e.uan, esi_no: e.esi_no, pay_method: e.pay_method, advance_balance: advBal(e.id, null) }; }).sort((p, q) => q.period.localeCompare(p.period)), error: null }; }
+      if (fn === 'save_expense_category') { check(a.p_admin_id, a.p_admin_pin, true); const p = a.p; if (!p.label) throw new Error('Add a name'); if (!p.account_id) throw new Error('Pick the account these bills go to');
+        if (a.p_key) { Object.assign(T.expense_categories.find(c => c.key === a.p_key), { label: p.label, emoji: p.emoji || '🧾', account_id: p.account_id, is_active: p.is_active !== false, sort: +p.sort || 500 }); }
+        else { if (T.expense_categories.some(c => c.label.toLowerCase() === p.label.toLowerCase())) throw new Error(`There is already a category called ${p.label}`);
+          T.expense_categories.push({ key: p.label, label: p.label, emoji: p.emoji || '🧾', account_id: p.account_id, is_active: true, sort: +p.sort || 500 }); }
+        T.expense_categories.sort((p1, p2) => p1.sort - p2.sort); return { data: null, error: null }; }
+      if (fn === 'save_recurring_bill') { needBooks(a.p_staff_id, a.p_pin); const p = a.p; if (!p.name) throw new Error('Give it a name, like "Inorbit rent"'); if (!(+p.amount > 0)) throw new Error('Enter the amount (an estimate is fine if it changes each month)');
+        if (p.amount_varies && !p.owner_staff_id) throw new Error('Pick who fills in the actual amount each time'); if (!p.next_date) throw new Error('Pick the date of the next bill');
+        const row = { ...p, amount: +p.amount, owner_staff_id: p.owner_staff_id || null, account_id: p.account_id || null, end_date: p.end_date || null };
+        if (a.p_id) Object.assign(T.recurring_bills.find(b => b.id === a.p_id), row); else T.recurring_bills.push({ id: nid('rb'), ...row, is_active: true }); return { data: row, error: null }; }
+      if (fn === 'run_recurring_bills') { needBooks(a.p_staff_id, a.p_pin); let n = 0;
+        T.recurring_bills.filter(b => b.is_active && b.next_date <= todayIST()).forEach(b => { let k = 0;
+          while (b.next_date <= todayIST() && (!b.end_date || b.next_date <= b.end_date) && k < 12) { const o = T.staff.find(s => s.id === b.owner_staff_id), varies = b.amount_varies && o;
+            const e = { id: nid('e'), store_id: b.store_id, category: b.category, amount: b.amount, payment_mode: b.payment_mode, vendor: b.vendor, bill_date: b.next_date, notes: 'Recurring: ' + b.name, submitted_by: o ? o.name : 'Recurring bills',
+              submitted_by_id: o ? o.id : null, status: varies ? 'sent_back' : 'submitted', account_id: b.account_id, decided_by: varies ? 'Recurring bills' : null,
+              decision_note: varies ? "Enter this month's actual amount and attach the bill, then resubmit." : null, created_at: new Date().toISOString(), receipt_url: null };
+            T.expenses.push(e); T.expense_events.push({ id: nid('ev'), expense_id: e.id, action: 'submitted', to_status: e.status, actor_name: 'Recurring bills', note: `Created automatically from "${b.name}"`, details: {}, created_at: e.created_at });
+            const dt = new Date(b.next_date + 'T12:00:00'); dt.setMonth(dt.getMonth() + (b.frequency === 'monthly' ? 1 : b.frequency === 'quarterly' ? 3 : 12)); b.next_date = dt.toISOString().slice(0, 10); n++; k++; } });
+        return { data: n, error: null }; }
       if (fn === 'void_order') {
         const s = check(a.p_admin_id, a.p_admin_pin), o = T.orders.find(x => sameId(x.id, a.p_order_id));
         if (!perm(s, 'void_bills')) throw new Error("You don't have access to void bills");
@@ -3493,7 +3998,7 @@ function makeDemoClient() {
 function startDemo() {
   db = makeDemoClient(); state.demo = true; state.storeId = null;
   $('demo-pill').classList.remove('hidden');
-  $('demo-box').innerHTML = '<p class="small" style="color:var(--leaf);font-weight:700">Sample data loaded. Tap any name and enter PIN 1234. Try Sai Kumar (admin), Kavya Iyer (accountant, see Accounting), Priya Reddy (works at two outlets), Ananya Rao (finance), Manoj Kumar (store manager) or Ravi Teja (barista). Neha Varma is locked out and Imran Khan has a temporary PIN.</p>';
+  $('demo-box').innerHTML = '<p class="small" style="color:var(--leaf);font-weight:700">Sample data loaded. Tap any name and enter PIN 1234. Try Sai Kumar (admin), Suma (payroll), Kavya Iyer (accountant), Priya Reddy (works at two outlets), Ananya Rao (finance), Manoj Kumar (store manager) or Ravi Teja (barista). Neha Varma is locked out and Imran Khan has a temporary PIN.</p>';
   loadLoginStaff();
 }
 </script>
