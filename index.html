@@ -715,6 +715,20 @@ async function enterApp() {
   await Promise.all([loadSettings(), refreshStore(), loadCategories()]);
   renderTicket(); go('pos');
   if (state.me.must_change_pin) myAccountModal(true);
+  checkSchema();
+}
+// The app needs database version 7. If Supabase is behind, tell admins exactly what to do.
+const NEEDED_SCHEMA = 7;
+async function checkSchema() {
+  if (state.demo) return;
+  const { data, error } = await db.rpc('btj_schema_version');
+  const have = error ? 0 : Number(data);
+  if (have >= NEEDED_SCHEMA) return;
+  const msg = isAdmin() ? 'The database is older than this app. Run the latest be-the-juice-schema.sql in Supabase (SQL Editor), then reload this page.'
+    : 'Some features are not ready yet. Ask your admin to update the database.';
+  let bar = $('schema-bar');
+  if (!bar) { bar = document.createElement('div'); bar.id = 'schema-bar'; document.querySelector('main').prepend(bar); }
+  bar.innerHTML = `<div style="background:var(--red);color:#fff;padding:10px 24px;font-weight:600;font-size:14px">⚠️ ${esc(msg)}</div>`;
 }
 function logout() {
   state.me = null; state.pin = null; state.cart = []; pinBuf = '';
