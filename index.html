@@ -438,6 +438,7 @@ tr:last-child td{border-bottom:none}
       <section class="view" id="v-stores"></section>
       <section class="view" id="v-staff"></section>
       <section class="view" id="v-settings"></section>
+      <section class="view" id="v-books"></section>
     </div>
   </main>
 </div>
@@ -514,13 +515,15 @@ const PERMS = [
   ['expense_pay', 'Record payments for approved bills', 'Bills'], ['expense_view_all', 'See every bill, not just their own', 'Bills'],
   ['reports', 'Dashboards, money, customers, feedback', 'Insights'],
   ['menu', 'Menu, boosters and recipes', 'Setup'], ['stock', 'Stock and restocking', 'Setup'],
-  ['outlets', 'Outlets and events', 'Setup'], ['settings', 'Payment settings', 'Setup']
+  ['outlets', 'Outlets and events', 'Setup'], ['settings', 'Payment settings', 'Setup'],
+  ['accounting', 'Keep the books: journals, bank, chart of accounts, bill coding', 'Accounting'], ['accounting_view', 'See accounting reports (view only)', 'Accounting']
 ];
 const ACCESS_PRESETS = {
   'Barista':       { perms: ['pos', 'sales_view', 'expense_submit'], limit: null },
   'Store manager': { perms: ['pos', 'sales_view', 'void_bills', 'expense_submit', 'expense_approve', 'reports', 'menu', 'stock'], limit: 5000 },
-  'Finance':       { perms: ['expense_submit', 'expense_view_all', 'expense_approve', 'expense_pay', 'reports'], limit: null },
-  'Approver':      { perms: ['expense_submit', 'expense_approve'], limit: 2000 }
+  'Finance':       { perms: ['expense_submit', 'expense_view_all', 'expense_approve', 'expense_pay', 'reports', 'accounting_view'], limit: null },
+  'Approver':      { perms: ['expense_submit', 'expense_approve'], limit: 2000 },
+  'Accountant':    { perms: ['accounting', 'accounting_view', 'expense_view_all', 'reports'], limit: null }
 };
 const can = p => isAdmin() || (state.me?.permissions || []).includes(p);
 // A person tied to an outlet can act on that outlet and the events it runs.
@@ -704,6 +707,7 @@ async function enterApp() {
   await loadStores();
   if (state.me.store_id && state.stores.some(s => sameId(s.id, state.me.store_id))) state.storeId = String(state.me.store_id);
   if (isAll() || !inScope(state.storeId)) { const first = state.stores.find(s => inScope(s.id)); if (first) state.storeId = String(first.id); }
+  if (!can('pos') && scopeStores().length > 1) state.storeId = ALL;   // office roles (finance, accountant) start on all outlets
   renderStoreSelect(); renderNav(); applyStorePresets();
   await Promise.all([loadSettings(), refreshStore()]);
   renderTicket(); go('pos');
@@ -728,6 +732,8 @@ const NAV = [
     ['accounts','📒','Money in & out', () => can('reports')],
     ['customers','👥','Customers', () => can('reports')],
     ['feedback','⭐','Feedback', () => can('reports')] ] },
+  { g:'Accounting', items:[
+    ['books','📚','Accounting', () => can('accounting') || can('accounting_view')] ] },
   { g:'Setup', items:[
     ['menu','🍍','Menu', () => can('menu')],
     ['boosters','🫐','Boosters', () => can('menu')],
@@ -1394,6 +1400,7 @@ async function saveBill(id) {
 async function billModal(id) {
   const e = state.cache.bills.find(x => sameId(x.id, id)); if (!e) return;
   openModal(`<div class="empty">Loading…</div>`, true);
+  await loadBooksBase();
   const [{ data: evs }, dup] = await Promise.all([
     db.from('expense_events').select('*').eq('expense_id', e.id).order('created_at'),
     e.duplicate_of ? db.from('expenses').select('id, amount, bill_date, created_at, submitted_by, status, invoice_no').eq('id', e.duplicate_of).maybeSingle() : Promise.resolve({ data: null })
@@ -1402,7 +1409,8 @@ async function billModal(id) {
   const step2 = st === 'rejected' ? ['Rejected', 'bad'] : st === 'sent_back' ? ['Sent back', 'now'] : st === 'cancelled' ? ['Withdrawn', 'bad'] : ['Approved', ['approved', 'paid'].includes(st) ? 'done' : 'now'];
   const step3 = ['Paid', st === 'paid' ? 'done' : st === 'approved' ? 'now' : ''];
   const VERB = { submitted: 'submitted the bill', approve: 'approved it', reject: 'rejected it', send_back: 'sent it back', resubmitted: 'fixed and resubmitted it',
-    paid: 'recorded the payment', withdrawn: 'withdrew the bill', admin_override: 'changed the status as admin', imported: 'logged it before approvals started' };
+    paid: 'recorded the payment', withdrawn: 'withdrew the bill', admin_override: 'changed the status as admin', imported: 'logged it before approvals started',
+    admin_edit: 'edited the bill as admin', recoded: 'changed the accounting details' };
   let actions = '';
   if (st === 'submitted' && can('expense_approve') && inScope(e.store_id)) {
     if (!isAdmin() && mine) actions += `<p class="small muted">You submitted this bill, so someone else has to approve it.</p>`;
@@ -1425,12 +1433,18 @@ async function billModal(id) {
         <div class="grid g2" style="gap:10px">
           <div class="field"><label for="py-amt">Amount paid</label><input class="input" id="py-amt" type="number" value="${esc(e.amount)}"></div>
           <div class="field"><label for="py-on">Paid on</label><input class="input" id="py-on" type="date" max="${todayIST()}" value="${todayIST()}"></div></div>
+        ${(state.cache.accounts || []).some(a => a.is_bank) ? `<div class="field"><label for="py-from">Paid from</label><select class="input" id="py-from">${acctOptions((acctByKey(m === 'Counter cash (already paid)' ? 'cash_drawer' : m === 'Cash' ? 'petty_cash' : 'bank') || {}).id, a => a.is_bank, 'Pick the account')}</select></div>` : ''}
         <div class="grid g2" style="gap:10px">
           <div class="field"><label for="py-to">Paid to</label><input class="input" id="py-to" value="${esc(to)}"></div>
           <div class="field"><label for="py-proof">Payment screenshot</label><input class="input" id="py-proof" type="file" accept="image/*,application/pdf"></div></div>
         <button class="btn berry block" id="py-go" onclick="payBill('${esc(e.id)}')">Mark as paid</button></div>`; }
   }
   if (mine && st === 'sent_back') actions += `<button class="btn berry block" style="margin-bottom:8px" onclick="resubmitBill('${esc(e.id)}')">Fix and resubmit</button>`;
+  if (isAdmin()) actions += `<button class="btn ghost block" style="margin-bottom:8px" onclick="editBillModal('${esc(e.id)}')">Edit bill details (admin)</button>`;
+  if (can('accounting') && (state.cache.accounts || []).length) actions += `<details style="margin-bottom:8px"${!isAdmin() ? ' open' : ''}><summary class="small" style="cursor:pointer;font-weight:700">Accounting: expense account and GST</summary>
+      <div class="grid g3" style="gap:10px;margin-top:8px"><div class="field span2"><label for="rc-acct">Expense account</label><select class="input" id="rc-acct">${acctOptions(e.account_id, a => a.type === 'expense', 'Default for "' + catInfo(e.category)[2] + '"')}</select></div>
+        <div class="field"><label for="rc-gst">GST in this bill</label><input class="input" id="rc-gst" type="number" step="0.01" value="${esc(e.gst_amount || 0)}"></div></div>
+      <div class="row"><input class="input" id="rc-note" placeholder="Note (optional)" style="flex:1"><button class="btn sm" onclick="recodeBill('${esc(e.id)}')">Save</button></div></details>`;
   if ((mine || isAdmin()) && ['submitted', 'sent_back'].includes(st)) actions += `<button class="btn ghost block" style="margin-bottom:8px" onclick="withdrawBill('${esc(e.id)}')">Withdraw this bill</button>`;
   if (isAdmin()) actions += `<details style="margin-top:8px"><summary class="small muted" style="cursor:pointer">Admin: change status</summary>
       <div class="row" style="margin-top:8px"><select class="input" id="ov-status" style="max-width:200px">${Object.entries(BILL_STATUS).map(([k, [l]]) => `<option value="${k}" ${k === st ? 'selected' : ''}>${l}</option>`).join('')}</select>
@@ -1447,6 +1461,7 @@ async function billModal(id) {
         <div class="small muted" style="margin-top:8px">Bill date</div><b>${e.bill_date ? prettyDate(e.bill_date) : '—'}</b>
         <div class="small muted" style="margin-top:8px">Paid at the time with</div><b>${esc((PAY_OUT.find(p => p[0] === e.payment_mode) || [, e.payment_mode || '—'])[1])}</b>
         ${e.notes ? `<div class="small muted" style="margin-top:8px">Note</div><div>${esc(e.notes)}</div>` : ''}
+        ${(state.cache.accounts || []).length ? `<div class="small muted" style="margin-top:8px">In the books under</div><div>${esc(acctName(e.account_id || (state.cache.accounts.find(a => a.category_key === e.category) || acctByKey('exp_misc') || {}).id))}${Number(e.gst_amount) ? `, GST ${inr(e.gst_amount)}` : ''}</div>` : ''}
         ${st === 'paid' && e.paid_method ? `<div class="small muted" style="margin-top:8px">Payment</div><div><b>${esc(e.paid_method)}</b>${e.paid_reference ? `, ref ${esc(e.paid_reference)}` : ''}${e.paid_to ? `, to ${esc(e.paid_to)}` : ''}${e.paid_on ? `, on ${prettyDate(e.paid_on)}` : ''}${e.payment_proof_url ? ` <a href="${esc(e.payment_proof_url)}" target="_blank" rel="noopener">View proof</a>` : ''}</div>` : ''}
       </div>
       <div>${e.receipt_url ? `<a href="${esc(e.receipt_url)}" target="_blank" rel="noopener"><img src="${esc(e.receipt_url)}" alt="Bill photo" style="width:100%;max-height:220px;object-fit:contain;border-radius:12px;background:var(--cream)" onerror="this.outerHTML='<span class=&quot;btn ghost&quot;>Open bill file</span>'"></a>` : '<div class="empty" style="background:var(--cream);border-radius:12px"><b>No photo</b>This bill was saved without a photo.</div>'}</div>
@@ -1472,7 +1487,7 @@ async function payBill(id) {
   $('py-go').disabled = true;
   const proof = $('py-proof').files[0] ? await upload($('py-proof'), 'receipts') : null;
   const { error } = await db.rpc('pay_expense', { p_staff_id: String(state.me.id), p_pin: state.pin, p_expense_id: String(id),
-    p_payment: { method, reference: ref, amount, paid_on: $('py-on').value, paid_to: $('py-to').value.trim(), proof_url: proof } });
+    p_payment: { method, reference: ref, amount, paid_on: $('py-on').value, paid_to: $('py-to').value.trim(), proof_url: proof, from_account_id: $('py-from')?.value || null } });
   if (error) { $('py-go').disabled = false; return toast(error.message, 'err'); }
   afterBillAction('Payment recorded. The bill is closed.');
 }
@@ -2114,6 +2129,564 @@ async function saveStore(id) {
 }
 
 /* =========================================================
+   ACCOUNTING (double-entry books, modelled on Xero / Zoho Books)
+   Sales, bills and payments post automatically in the database.
+   ========================================================= */
+state.books = { tab: 'overview', report: 'pnl', jsrc: 'all', showVoid: false, bank: null, bankTab: 'open', gl: null, byOutlet: false, coaArchived: false };
+state.periods.books = { preset: 'month' };
+const ACCT_TYPES = [['asset', 'Assets'], ['liability', 'Liabilities'], ['equity', 'Equity'], ['income', 'Income'], ['expense', 'Expenses']];
+const SUBTYPES = {
+  asset: [['bank', 'Bank'], ['cash', 'Cash'], ['clearing', 'Money on its way (UPI, card)'], ['current_asset', 'Current asset'], ['inventory', 'Stock'], ['fixed_asset', 'Fixed asset'], ['tax', 'Tax credit'], ['other', 'Other']],
+  liability: [['payable', 'Payable'], ['current_liability', 'Current liability'], ['tax', 'Tax'], ['loan', 'Loan'], ['other', 'Other']],
+  equity: [['equity', 'Equity']],
+  income: [['sales', 'Sales'], ['other_income', 'Other income'], ['contra_income', 'Reduces income (like discounts)']],
+  expense: [['cogs', 'Cost of goods sold'], ['operating', 'Operating expense'], ['other', 'Other']]
+};
+const SRC = { sale: ['Sale', 'ok'], bill: ['Bill', 'low'], bill_payment: ['Bill payment', 'navy'], manual: ['Journal', 'berry'], bank: ['Bank entry', ''] };
+const canBooks = () => can('accounting');
+async function loadBooksBase(force) {
+  if (!force && state.cache.accounts) return;
+  const [{ data: a, error }, { data: s }] = await Promise.all([db.from('accounts').select('*').order('code'), db.from('accounting_settings').select('*')]);
+  if (error) console.warn('Accounting tables not found yet', error);
+  state.cache.accounts = a || []; state.cache.acctSettings = Object.fromEntries((s || []).map(r => [r.key, r.value]));
+}
+const acct = id => (state.cache.accounts || []).find(a => sameId(a.id, id));
+const acctByKey = k => (state.cache.accounts || []).find(a => a.system_key === k);
+const acctName = id => { const a = acct(id); return a ? `${a.code} ${a.name}` : '—'; };
+// Outlets for the books: everything when all outlets are selected by someone with all access.
+const ledgerStores = () => isAll() ? ((isAdmin() || state.me.all_stores) ? null : storeFilterIds()) : [String(state.storeId)];
+const natural = a => ['asset', 'expense'].includes(a.type);
+const bal = (a, t) => !t ? 0 : (natural(a) ? 1 : -1) * (Number(t.debit) - Number(t.credit));
+async function totals(from, to, stores = ledgerStores()) {
+  const { data, error } = await db.rpc('account_totals', { p_from: from, p_to: to, p_store_ids: stores });
+  if (fail(error, 'Loading the books')) return {};
+  return Object.fromEntries((data || []).map(r => [String(r.account_id), r]));
+}
+function acctOptions(sel, filter = () => true, blank = 'Pick an account') {
+  return `<option value="">${blank}</option>` + ACCT_TYPES.map(([t, l]) => {
+    const list = (state.cache.accounts || []).filter(a => a.type === t && a.is_active && filter(a));
+    return list.length ? `<optgroup label="${l}">${list.map(a => `<option value="${esc(a.id)}" ${sameId(a.id, sel) ? 'selected' : ''}>${esc(a.code)} ${esc(a.name)}</option>`).join('')}</optgroup>` : '';
+  }).join('');
+}
+const scopeLabel = () => isAll() ? (isAdmin() || state.me.all_stores ? 'All outlets' : 'All your outlets') : (currentStore()?.name || '');
+const money = (v, strong) => `<span class="${strong ? 'money' : ''}" style="${Number(v) < 0 ? 'color:var(--red)' : ''}">${Number(v) < 0 ? '−' : ''}${inr(Math.abs(Number(v)))}</span>`;
+function promptBox(title, body, label, okText = 'Confirm') {
+  return new Promise(res => {
+    const root = $('confirm-root');
+    root.innerHTML = `<div class="backdrop" style="z-index:400"><div class="modal"><h2>${esc(title)}</h2><p class="sub">${esc(body)}</p>
+      <div class="field"><label for="pb-in">${esc(label)}</label><input class="input" id="pb-in"></div>
+      <div class="modal-actions"><button class="btn ghost" id="pb-no">Cancel</button><button class="btn danger" id="pb-yes">${esc(okText)}</button></div></div></div>`;
+    root.querySelector('#pb-no').onclick = () => { root.innerHTML = ''; res(null); };
+    root.querySelector('#pb-yes').onclick = () => { const v = $('pb-in').value.trim(); if (!v) return toast('Add a reason', 'err'); root.innerHTML = ''; res(v); };
+  });
+}
+
+RENDER.books = async function () {
+  const el = $('v-books');
+  if (!el.innerHTML) el.innerHTML = LOADING;
+  await loadBooksBase(true);
+  if (state.view !== 'books') return;
+  const S = state.cache.acctSettings;
+  const tabs = [['overview', 'Overview'], ['journals', 'Journals'], ['bank', 'Bank'], ['coa', 'Chart of accounts'], ['reports', 'Reports'], ['settings', 'Settings']];
+  el.innerHTML = `<div class="period"><div class="seg" style="flex:0 1 auto">${tabs.map(([k, l]) => `<button class="${state.books.tab === k ? 'on' : ''}" onclick="state.books.tab='${k}';RENDER.books()">${l}</button>`).join('')}</div>
+      <span class="spacer"></span><span class="pill">${esc(scopeLabel())}</span>${S.lock_date ? `<span class="pill low">🔒 Locked to ${prettyDate(S.lock_date)}</span>` : ''}${!canBooks() ? '<span class="pill">View only</span>' : ''}</div>
+    <div id="books-body">${LOADING}</div>`;
+  ({ overview: booksOverview, journals: booksJournals, bank: booksBank, coa: booksCOA, reports: booksReports, settings: booksSettings })[state.books.tab]();
+};
+const booksStale = tab => state.view !== 'books' || state.books.tab !== tab;
+
+/* ---------- overview ---------- */
+async function booksOverview() {
+  const t = todayIST(), m0 = t.slice(0, 8) + '01';
+  const [all, biz, month, pm, bl, ub] = await Promise.all([totals(null, t), totals(null, t, null), totals(m0, t), db.rpc('monthly_pnl', { p_months: 6, p_store_ids: ledgerStores() }),
+    db.from('bank_lines').select('id, amount').eq('status', 'new'), db.from('expenses').select('id, amount').eq('status', 'approved').in('store_id', storeFilterIds())]);
+  if (booksStale('overview')) return;
+  const A = state.cache.accounts, k = key => { const a = acctByKey(key); return a ? bal(a, all[String(a.id)]) : 0; }, kb = key => { const a = acctByKey(key); return a ? bal(a, biz[String(a.id)]) : 0; };
+  const bank = sum(A.filter(a => a.subtype === 'bank'), a => bal(a, biz[String(a.id)]));
+  const inc = sum(A.filter(a => a.type === 'income'), a => bal(a, month[String(a.id)])), exp = sum(A.filter(a => a.type === 'expense'), a => bal(a, month[String(a.id)]));
+  const gstOn = state.cache.acctSettings.gst_registered === 'true';
+  const months = pm.data || [], openLines = (bl.data || []).length, unpaid = ub.data || [];
+  $('books-body').innerHTML = `
+    <div class="grid g4" style="margin-bottom:16px">
+      ${kpi('In the bank', money(bank), '<span class="delta flat">Whole business, per the books</span>', 'var(--navy)')}
+      ${kpi('Cash', money(k('cash_drawer') + k('petty_cash')), `<span class="delta flat">Drawer ${inr(k('cash_drawer'))}, petty ${inr(k('petty_cash'))}</span>`, 'var(--kiwi)')}
+      ${kpi('UPI and card on the way', money(k('upi_clearing') + k('card_clearing')), '<span class="delta flat">Sales not yet settled to the bank</span>', 'var(--mango)')}
+      ${kpi('You owe', money(kb('ap') + kb('staff_payable')), `<span class="delta flat">Vendors ${inr(kb('ap'))}, staff ${inr(kb('staff_payable'))}</span>`, 'var(--red)')}
+    </div>
+    <div class="story"><h3>This month so far</h3><div class="story-list">
+      <div class="story-item"><div class="big">${inr(inc)}</div><div class="why">Income after discounts${gstOn ? ' and GST' : ''}</div></div>
+      <div class="story-item"><div class="big">${inr(exp)}</div><div class="why">Expenses from approved bills and journals</div></div>
+      <div class="story-item"><div class="big" style="color:${inc - exp >= 0 ? 'var(--kiwi)' : '#ff8a9a'}">${inc - exp < 0 ? '−' : ''}${inr(Math.abs(inc - exp))}</div><div class="why">Net profit, ${inc ? pct(inc - exp, inc) : 0}% margin</div></div>
+      ${gstOn ? `<div class="story-item"><div class="big">${inr(k('gst_output') - k('gst_input'))}</div><div class="why">GST to pay so far (collected minus input credit)</div></div>` : ''}
+    </div></div>
+    <div class="grid g3">
+      <div class="panel span2"><h3>Income and expenses, last 6 months</h3><p class="sub">The line is net profit.</p><div class="chart-box"><canvas id="ch-books"></canvas></div></div>
+      <div class="panel"><h3>To do</h3><p class="sub">Things that keep the books accurate.</p>
+        <div class="timeline">
+          <div class="ev"><b>${openLines} bank line${openLines === 1 ? '' : 's'} to reconcile</b><div class="small muted">Match each bank statement line to the books.</div>${openLines ? `<button class="btn ghost sm" style="margin-top:6px" onclick="state.books.tab='bank';RENDER.books()">Reconcile</button>` : ''}</div>
+          <div class="ev"><b>${unpaid.length} approved bill${unpaid.length === 1 ? '' : 's'} unpaid</b><div class="small muted">${inr(sum(unpaid, e => e.amount))} owed. Pay them from Bills &amp; expenses.</div></div>
+          <div class="ev"><b>${k('upi_clearing') + k('card_clearing') > 0 ? inr(k('upi_clearing') + k('card_clearing')) + ' waiting to settle' : 'Settlements are up to date'}</b><div class="small muted">When a UPI or card settlement reaches the bank, create its bank entry against "UPI to be settled" or "Card to be settled".</div></div>
+          <div class="ev"><b>${state.cache.acctSettings.lock_date ? 'Locked up to ' + prettyDate(state.cache.acctSettings.lock_date) : 'No lock date set'}</b><div class="small muted">Lock each month once it's reconciled, so nothing in it can change.</div></div>
+        </div></div>
+    </div>`;
+  const labels = months.map(m => new Date(m.month + '-15').toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }));
+  mkChart('ch-books', { type: 'bar', data: { labels, datasets: [
+      { label: 'Income', data: months.map(m => Math.round(m.income)), backgroundColor: '#0A8A3A', borderRadius: 6, order: 2 },
+      { label: 'Expenses', data: months.map(m => Math.round(m.expense)), backgroundColor: '#D7263D', borderRadius: 6, order: 2 },
+      { type: 'line', label: 'Net profit', data: months.map(m => Math.round(m.income - m.expense)), borderColor: '#21343C', backgroundColor: '#21343C', tension: .3, order: 1 }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }, tooltip: { callbacks: { label: c => ` ${c.dataset.label} ${c.raw < 0 ? '−' : ''}${inr(Math.abs(c.raw))}` } } },
+      scales: { y: { ticks: { callback: v => (v < 0 ? '−' : '') + inr(Math.abs(v)) }, grid: { color: '#F6ECE2' } }, x: { grid: { display: false } } } } });
+}
+
+/* ---------- journals ---------- */
+async function booksJournals() {
+  const r = range('books'), b = $('books-body');
+  b.innerHTML = periodBar('books', canBooks() ? `<button class="btn ghost sm" onclick="quickEntry('spend')">Spend money</button><button class="btn ghost sm" onclick="quickEntry('receive')">Receive money</button><button class="btn ghost sm" onclick="quickEntry('transfer')">Transfer</button><button class="btn berry sm" onclick="journalForm()">+ Journal</button>` : '') +
+    `<div class="row" style="margin-bottom:12px"><div class="chips">${[['all', 'Everything'], ['sale', 'Sales'], ['bill', 'Bills'], ['bill_payment', 'Bill payments'], ['manual', 'Journals'], ['bank', 'Bank entries']].map(([k, l]) => `<button class="chip ${state.books.jsrc === k ? 'on' : ''}" onclick="state.books.jsrc='${k}';booksJournals()">${l}</button>`).join('')}</div>
+      <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" ${state.books.showVoid ? 'checked' : ''} onchange="state.books.showVoid=this.checked;booksJournals()"> Show voided</label></div>
+    <div id="jr-body">${LOADING}</div>`;
+  let rows = await fetchAll(() => { let q = db.from('journals').select('*, journal_lines(account_id, store_id, debit, credit, description)').gte('entry_date', r.s).lte('entry_date', r.e).order('entry_date', { ascending: false }).order('journal_no', { ascending: false });
+    if (state.books.jsrc !== 'all') q = q.eq('source_type', state.books.jsrc); if (!state.books.showVoid) q = q.eq('status', 'posted'); return q; }, 'Loading journals');
+  if (booksStale('journals')) return;
+  const ids = ledgerStores();
+  if (ids) rows = rows.filter(j => (j.journal_lines || []).some(l => ids.includes(String(l.store_id))));
+  state.cache.journals = rows;
+  $('jr-body').innerHTML = `<div class="panel">${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Date</th><th>No.</th><th>Description</th><th>Type</th><th>Outlet</th><th style="text-align:right">Amount</th></tr></thead><tbody>
+    ${rows.slice(0, 400).map(j => { const st = [...new Set((j.journal_lines || []).map(l => l.store_id).filter(Boolean))]; return `<tr style="cursor:pointer;${j.status === 'void' ? 'opacity:.45;text-decoration:line-through' : ''}" onclick="journalModal('${esc(j.id)}')">
+      <td>${prettyDate(j.entry_date)}</td><td class="small muted">J-${j.journal_no}</td><td>${esc(j.narration || '')}${j.reference ? ` <span class="small muted">ref ${esc(j.reference)}</span>` : ''}</td>
+      <td><span class="pill ${(SRC[j.source_type] || ['', ''])[1]}">${(SRC[j.source_type] || [j.source_type])[0]}</span></td>
+      <td class="small">${st.length ? esc(st.map(id => storeById(id)?.name || '').join(', ')) : '<span class="muted">—</span>'}</td>
+      <td style="text-align:right" class="money">${inr(sum(j.journal_lines || [], l => l.debit))}</td></tr>`; }).join('')}</tbody></table></div>
+    ${rows.length > 400 ? `<p class="small muted" style="margin-top:8px">Showing the latest 400 of ${rows.length}. Narrow the dates or type to see more.</p>` : ''}` : emptyState('No entries in this period', 'Sales and bills appear here automatically.')}</div>`;
+}
+function journalModal(id) {
+  const j = state.cache.journals.find(x => sameId(x.id, id)); if (!j) return;
+  const lines = j.journal_lines || [];
+  openModal(`<div class="row"><h2 style="margin:0">J-${j.journal_no}</h2><span class="pill ${(SRC[j.source_type] || ['', ''])[1]}">${(SRC[j.source_type] || [j.source_type])[0]}</span><span class="spacer"></span>${j.status === 'void' ? '<span class="pill out">Voided</span>' : '<span class="pill ok">Posted</span>'}</div>
+    <p class="sub" style="margin-top:6px">${prettyDate(j.entry_date)}. ${esc(j.narration || '')}${j.reference ? `, ref ${esc(j.reference)}` : ''}. Entered by ${esc(j.created_by || 'System')}.</p>
+    ${j.status === 'void' ? `<div class="cust-hint new" style="margin-bottom:12px">Voided by ${esc(j.voided_by || '')}${j.void_reason ? `: "${esc(j.void_reason)}"` : ''}</div>` : ''}
+    <div class="table-wrap"><table><thead><tr><th>Account</th><th>Outlet</th><th>Description</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th></tr></thead><tbody>
+      ${lines.map(l => `<tr><td><b>${esc(acctName(l.account_id))}</b></td><td class="small">${esc(storeById(l.store_id)?.name || '—')}</td><td class="small">${esc(l.description || '')}</td>
+        <td style="text-align:right">${Number(l.debit) ? inr(l.debit) : ''}</td><td style="text-align:right">${Number(l.credit) ? inr(l.credit) : ''}</td></tr>`).join('')}
+      <tr><td colspan="3"><b>Total</b></td><td style="text-align:right" class="money">${inr(sum(lines, l => l.debit))}</td><td style="text-align:right" class="money">${inr(sum(lines, l => l.credit))}</td></tr></tbody></table></div>
+    ${['sale', 'bill', 'bill_payment'].includes(j.source_type) ? '<p class="small muted" style="margin-top:10px">Posted automatically. It changes by itself if the sale is voided or the bill is edited.</p>' : ''}
+    <div class="modal-actions">${canBooks() && j.status === 'posted' && ['manual', 'bank'].includes(j.source_type) ? `<button class="btn danger" onclick="voidJournal('${esc(j.id)}')">Void entry</button>` : ''}<button class="btn ghost" onclick="closeModal()">Close</button></div>`, true);
+}
+async function voidJournal(id) {
+  const reason = await promptBox('Void this entry?', 'It stays in the books marked as voided and stops counting in every report.', 'Reason', 'Void entry'); if (!reason) return;
+  const { error } = await db.rpc('void_manual_journal', { p_staff_id: String(state.me.id), p_pin: state.pin, p_journal_id: String(id), p_reason: reason });
+  if (error) return toast(error.message, 'err'); closeModal(); toast('Entry voided', 'ok'); RENDER.books();
+}
+const jStoreSel = (cls, sel = null) => `<select class="input ${cls}">${storeOptions(sel ?? (isAll() ? '' : state.storeId), { allOption: 'No outlet', scoped: true })}</select>`;
+function jLineRow(l = {}) {
+  return `<tr class="jl"><td style="min-width:200px"><select class="input jl-acct">${acctOptions(l.account_id)}</select></td><td style="min-width:140px">${jStoreSel('jl-store', l.store_id)}</td>
+    <td><input class="input jl-desc" value="${esc(l.description || '')}"></td>
+    <td style="width:120px"><input class="input jl-dr" type="number" step="0.01" value="${l.debit || ''}" oninput="if(this.value)this.closest('tr').querySelector('.jl-cr').value='';jTotals()"></td>
+    <td style="width:120px"><input class="input jl-cr" type="number" step="0.01" value="${l.credit || ''}" oninput="if(this.value)this.closest('tr').querySelector('.jl-dr').value='';jTotals()"></td>
+    <td><button class="btn danger sm" onclick="this.closest('tr').remove();jTotals()" aria-label="Remove line">✕</button></td></tr>`;
+}
+function journalForm() {
+  openModal(`<h2>New journal</h2><p class="sub">For anything that isn't a sale or bill: rent, salaries, owner's money in or out, loans, depreciation, opening balances. Debits must equal credits.</p>
+    <div class="grid g3" style="gap:10px"><div class="field"><label for="jf-date">Date</label><input class="input" id="jf-date" type="date" value="${todayIST()}"></div>
+      <div class="field span2"><label for="jf-narr">Description</label><input class="input" id="jf-narr" placeholder="Rent for November, Inorbit"></div></div>
+    <div class="field"><label for="jf-ref">Reference</label><input class="input" id="jf-ref" placeholder="Optional, like an agreement or voucher number"></div>
+    <div class="table-wrap"><table><thead><tr><th>Account</th><th>Outlet</th><th>Line description</th><th>Debit</th><th>Credit</th><th></th></tr></thead><tbody id="jf-lines">${jLineRow()}${jLineRow()}</tbody></table></div>
+    <div class="row" style="margin-top:8px"><button class="btn ghost sm" onclick="$('jf-lines').insertAdjacentHTML('beforeend', jLineRow())">+ Add line</button><span class="spacer"></span><span id="jf-tot" class="small"></span></div>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" id="jf-go" onclick="saveJournal()">Post journal</button></div>`, true);
+  jTotals();
+}
+function jTotals() {
+  const rows = [...document.querySelectorAll('#jf-lines .jl')];
+  const d = sum(rows, r => r.querySelector('.jl-dr').value), c = sum(rows, r => r.querySelector('.jl-cr').value);
+  const el = $('jf-tot'); if (!el) return;
+  el.innerHTML = `Debits <b>${inr(d)}</b>, credits <b>${inr(c)}</b> ${Math.round(d * 100) === Math.round(c * 100) && d > 0 ? '<span class="pill ok">Balanced</span>' : `<span class="pill out">Off by ${inr(Math.abs(d - c))}</span>`}`;
+}
+async function saveJournal() {
+  const lines = [...document.querySelectorAll('#jf-lines .jl')].map(r => ({ account_id: r.querySelector('.jl-acct').value, store_id: r.querySelector('.jl-store').value || null,
+    description: r.querySelector('.jl-desc').value.trim(), debit: parseFloat(r.querySelector('.jl-dr').value) || 0, credit: parseFloat(r.querySelector('.jl-cr').value) || 0 })).filter(l => l.debit || l.credit);
+  if (lines.some(l => !l.account_id)) return toast('Pick an account on every line with an amount', 'err');
+  await postJournal({ date: $('jf-date').value, narration: $('jf-narr').value.trim(), reference: $('jf-ref').value.trim(), lines }, 'jf-go');
+}
+async function postJournal(j, btnId) {
+  $(btnId).disabled = true;
+  const { error } = await db.rpc('post_manual_journal', { p_staff_id: String(state.me.id), p_pin: state.pin, p_journal: j });
+  if (error) { $(btnId).disabled = false; return toast(error.message, 'err'); }
+  closeModal(); toast('Entry posted', 'ok'); state.books.tab = 'journals'; RENDER.books();
+}
+function quickEntry(kind) {
+  const isMoney = a => a.is_bank;
+  const cfg = {
+    spend: ['Spend money', 'Money going out that isn\u2019t a bill: rent, salaries, owner drawings, bank charges.', 'Paid from', isMoney, 'What it was for', a => !a.is_bank],
+    receive: ['Receive money', 'Money coming in that isn\u2019t a counter sale: owner\u2019s capital, a loan, event fees, refunds.', 'Received into', isMoney, 'What it was for', a => !a.is_bank],
+    transfer: ['Transfer', 'Move money between bank and cash, or record a UPI or card settlement.', 'From', a => a.is_bank || a.subtype === 'clearing', 'To', a => a.is_bank || a.subtype === 'clearing']
+  }[kind];
+  const defFrom = kind === 'transfer' ? acctByKey('cash_drawer')?.id : acctByKey('bank')?.id;
+  openModal(`<h2>${cfg[0]}</h2><p class="sub">${cfg[1]}</p>
+    <div class="grid g2" style="gap:10px"><div class="field"><label for="qe-a">${cfg[2]}</label><select class="input" id="qe-a">${acctOptions(defFrom, cfg[3])}</select></div>
+      <div class="field"><label for="qe-b">${cfg[4]}</label><select class="input" id="qe-b">${acctOptions(kind === 'transfer' ? acctByKey('bank')?.id : null, cfg[5])}</select></div></div>
+    <div class="grid g3" style="gap:10px"><div class="field"><label for="qe-amt">Amount</label><input class="input" id="qe-amt" type="number" step="0.01" style="font-weight:800;font-size:18px"></div>
+      <div class="field"><label for="qe-date">Date</label><input class="input" id="qe-date" type="date" value="${todayIST()}"></div>
+      <div class="field"><label>Outlet</label>${jStoreSel('', null).replace('class="input "', 'class="input" id="qe-store"')}</div></div>
+    <div class="grid g2" style="gap:10px"><div class="field"><label for="qe-narr">Description</label><input class="input" id="qe-narr" placeholder="${kind === 'spend' ? 'Rent for November' : kind === 'receive' ? 'Owner added capital' : 'Cash deposited to bank'}"></div>
+      <div class="field"><label for="qe-ref">Reference</label><input class="input" id="qe-ref" placeholder="UTR or voucher number"></div></div>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" id="qe-go" onclick="saveQuick('${kind}')">Post</button></div>`);
+}
+async function saveQuick(kind) {
+  const a = $('qe-a').value, b = $('qe-b').value, amt = parseFloat($('qe-amt').value), store = $('qe-store').value || null;
+  if (!a || !b) return toast('Pick both accounts', 'err'); if (a === b) return toast('Pick two different accounts', 'err'); if (!(amt > 0)) return toast('Enter the amount', 'err');
+  const desc = $('qe-narr').value.trim() || { spend: 'Money spent', receive: 'Money received', transfer: 'Transfer' }[kind];
+  const lines = kind === 'receive' ? [{ account_id: a, debit: amt }, { account_id: b, credit: amt }] : [{ account_id: b, debit: amt }, { account_id: a, credit: amt }];
+  await postJournal({ date: $('qe-date').value, narration: desc, reference: $('qe-ref').value.trim(), lines: lines.map(l => ({ ...l, store_id: store, description: desc })) }, 'qe-go');
+}
+/* ---------- bank reconciliation ---------- */
+async function booksBank() {
+  const banks = state.cache.accounts.filter(a => a.is_bank && a.is_active);
+  if (!banks.length) { $('books-body').innerHTML = `<div class="panel">${emptyState('No bank accounts', 'Add a bank account in Chart of accounts first.')}</div>`; return; }
+  if (!banks.some(a => sameId(a.id, state.books.bank))) state.books.bank = String((acctByKey('bank') || banks[0]).id);
+  const A = acct(state.books.bank);
+  const [{ data: lines }, { data: open }, all] = await Promise.all([
+    db.from('bank_lines').select('*').eq('account_id', A.id).order('txn_date', { ascending: false }).limit(800),
+    db.rpc('account_ledger', { p_account: A.id, p_from: addDays(todayIST(), -240), p_to: null, p_store_ids: null, p_only_open: true }),
+    totals(null, null, null)]);
+  if (booksStale('bank')) return;
+  state.cache.bankLines = lines || []; state.cache.openLedger = open || [];
+  const L = state.cache.bankLines, todo = L.filter(l => l.status === 'new'), done = L.filter(l => ['matched', 'posted'].includes(l.status)), ign = L.filter(l => l.status === 'ignored');
+  const tab = state.books.bankTab, list = tab === 'open' ? todo : tab === 'done' ? done : ign;
+  const used = new Set();
+  const guessAcct = l => { const d = (l.description || '').toLowerCase();
+    if (l.amount > 0 && /upi|razorpay|paytm|phonepe|gpay|bharatpe/.test(d)) return acctByKey('upi_clearing')?.id;
+    if (l.amount > 0 && /card|pos|pine|mswipe|settle/.test(d)) return acctByKey('card_clearing')?.id;
+    if (l.amount < 0 && /charge|mdr|fee|gst on/.test(d)) return state.cache.accounts.find(a => a.code === '6050')?.id;
+    if (l.amount < 0 && /rent/.test(d)) return state.cache.accounts.find(a => a.code === '6000')?.id;
+    if (l.amount < 0 && /salary|wages/.test(d)) return state.cache.accounts.find(a => a.code === '6010')?.id;
+    if (l.amount > 0 && /cash dep/.test(d)) return acctByKey('cash_drawer')?.id;
+    return ''; };
+  $('books-body').innerHTML = `
+    <div class="row" style="margin-bottom:14px"><div class="chips">${banks.map(a => `<button class="chip ${sameId(a.id, A.id) ? 'on' : ''}" onclick="state.books.bank='${esc(a.id)}';booksBank()">${esc(a.name)}</button>`).join('')}</div>
+      <span class="spacer"></span>${canBooks() ? '<button class="btn berry" onclick="importBankModal()">Import statement</button>' : ''}</div>
+    <div class="grid g3" style="margin-bottom:16px">
+      ${kpi('Balance in the books', money(bal(A, all[String(A.id)])), `<span class="delta flat">${esc(A.code)} ${esc(A.name)}</span>`, 'var(--navy)')}
+      ${kpi('Statement lines to reconcile', todo.length, `<span class="delta flat">${inr(sum(todo.filter(l => l.amount > 0), l => l.amount))} in, ${inr(-sum(todo.filter(l => l.amount < 0), l => l.amount))} out</span>`, 'var(--mango)')}
+      ${kpi('Book entries not on a statement yet', state.cache.openLedger.length, '<span class="delta flat">From the last 8 months</span>', 'var(--berry)')}
+    </div>
+    <div class="period"><div class="seg" style="flex:0 1 auto">${[['open', `To reconcile (${todo.length})`], ['done', `Reconciled (${done.length})`], ['ignored', `Ignored (${ign.length})`]].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" onclick="state.books.bankTab='${k}';booksBank()">${l}</button>`).join('')}</div></div>
+    <div class="panel">${list.length ? list.slice(0, 150).map(l => {
+      const amtHtml = `<b style="font-size:17px;color:${l.amount >= 0 ? 'var(--leaf)' : 'var(--red)'}">${l.amount >= 0 ? '+' : '−'}${inr(Math.abs(l.amount))}</b>`;
+      const head = `<div><b>${esc(l.description || 'No description')}</b><div class="small muted">${prettyDate(l.txn_date)}${l.reference ? `, ref ${esc(l.reference)}` : ''}</div></div>`;
+      if (tab !== 'open') return `<div class="row" style="padding:12px 0;border-bottom:1px solid var(--line)">${head}<span class="spacer"></span>${amtHtml}
+        <span class="pill ${l.status === 'ignored' ? '' : 'ok'}">${{ matched: 'Matched', posted: 'Entry created', ignored: 'Ignored' }[l.status]}</span>${canBooks() ? `<button class="btn ghost sm" onclick="resetBankLine('${esc(l.id)}')">${l.status === 'ignored' ? 'Bring back' : 'Unmatch'}</button>` : ''}</div>`;
+      const sugg = state.cache.openLedger.filter(x => !used.has(x.line_id) && Math.round((Number(x.debit) - Number(x.credit)) * 100) === Math.round(l.amount * 100) && Math.abs(daysBetween(x.entry_date, l.txn_date) - 1) <= 7)
+        .sort((a, b) => Math.abs(daysBetween(a.entry_date, l.txn_date)) - Math.abs(daysBetween(b.entry_date, l.txn_date))).slice(0, 2);
+      if (sugg[0]) used.add(sugg[0].line_id);
+      return `<div style="padding:14px 0;border-bottom:1px solid var(--line)"><div class="row">${head}<span class="spacer"></span>${amtHtml}</div>
+        ${canBooks() ? `<div class="grid g2" style="gap:12px;margin-top:10px">
+          <div class="fb-card" style="margin:0;padding:12px"><div class="fb-q" style="margin-top:0">Match to an entry in the books</div>
+            ${sugg.length ? sugg.map(x => `<button class="btn ghost sm block" style="justify-content:space-between;margin-bottom:6px" onclick="matchBankLine('${esc(l.id)}','${esc(x.line_id)}')"><span>J-${x.journal_no} ${esc((x.narration || '').slice(0, 40))}</span><span class="muted">${prettyDate(x.entry_date)}</span></button>`).join('')
+              : '<div class="small muted">No entry with this exact amount nearby.</div>'}</div>
+          <div class="fb-card" style="margin:0;padding:12px"><div class="fb-q" style="margin-top:0">Or create the entry</div>
+            <div class="row" style="flex-wrap:nowrap"><select class="input" id="bk-a-${esc(l.id)}">${acctOptions(guessAcct(l), a => !sameId(a.id, A.id), 'What is this?')}</select>${jStoreSel('', null).replace('class="input "', `class="input" id="bk-s-${esc(l.id)}" style="max-width:150px"`)}</div>
+            <div class="row" style="margin-top:8px"><button class="btn sm" onclick="postBankLine('${esc(l.id)}')">Create entry</button><button class="link-btn" onclick="ignoreBankLine('${esc(l.id)}')">Ignore</button></div></div>
+        </div>` : ''}</div>`; }).join('') + (list.length > 150 ? '<p class="small muted" style="margin-top:8px">Showing 150 lines. Work through these and the rest will show.</p>' : '')
+      : emptyState(tab === 'open' ? 'All reconciled' : 'Nothing here yet', tab === 'open' ? 'Import your latest bank statement to keep going.' : '')}</div>`;
+}
+async function bankAction(fn, args, msg) {
+  const { error } = await db.rpc(fn, { p_staff_id: String(state.me.id), p_pin: state.pin, ...args });
+  if (error) return toast(error.message, 'err'); toast(msg, 'ok'); booksBank();
+}
+const matchBankLine = (b, l) => bankAction('match_bank_line', { p_bank_line_id: b, p_journal_line_id: l }, 'Matched');
+function postBankLine(id) { const a = $('bk-a-' + id).value; if (!a) return toast('Pick what this line is for', 'err'); bankAction('post_bank_line', { p_bank_line_id: id, p_account_id: a, p_store_id: $('bk-s-' + id).value || null, p_narration: '' }, 'Entry created and matched'); }
+const ignoreBankLine = id => bankAction('reset_bank_line', { p_bank_line_id: id, p_ignore: true }, 'Ignored');
+const resetBankLine = id => bankAction('reset_bank_line', { p_bank_line_id: id, p_ignore: false }, 'Moved back to reconcile');
+
+function importBankModal() {
+  openModal(`<h2>Import a bank statement</h2><p class="sub">Download the statement from your bank's website as CSV or Excel and pick it here. Lines you've already imported are skipped, so overlapping dates are fine.</p>
+    <div class="field"><label for="bk-file">Statement file</label><input class="input" type="file" id="bk-file" accept=".csv,.xls,.xlsx" onchange="readStatement(this)"></div><div id="bk-map"></div>`, true);
+}
+function parseStmtDate(v) {
+  if (v instanceof Date && !isNaN(v)) return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
+  const s = String(v || '').trim(); let m;
+  if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  if ((m = s.match(/^(\d{1,2})[\/\-. ](\d{1,2})[\/\-. ](\d{2,4})/))) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+  if ((m = s.match(/^(\d{1,2})[\s\-]([A-Za-z]{3})[A-Za-z]*[\s\-,]+(\d{2,4})/))) { const mo = 'janfebmaraprmayjunjulaugsepoctnovdec'.indexOf(m[2].toLowerCase()) / 3 + 1; if (mo > 0) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${String(mo).padStart(2, '0')}-${m[1].padStart(2, '0')}`; } }
+  return null;
+}
+const parseAmt = v => { let s = String(v ?? '').replace(/[₹,\s]/g, ''); if (!s) return 0; let neg = /dr$/i.test(s) || /^\(.*\)$/.test(s); s = s.replace(/(cr|dr)$/i, '').replace(/[()]/g, ''); const n = parseFloat(s); return isNaN(n) ? 0 : (neg ? -Math.abs(n) : n); };
+async function readStatement(inp) {
+  const f = inp.files[0]; if (!f) return;
+  // CSVs are read as plain text so dates stay day-first (08/11 = 8 Nov), the way Indian banks write them.
+  const wb = /\.csv$/i.test(f.name) ? XLSX.read(await f.text(), { type: 'string', raw: true }) : XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: true });
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
+  let h = rows.findIndex(r => r.some(c => /date/i.test(String(c))) && r.filter(c => String(c).trim()).length >= 3); if (h < 0) h = 0;
+  const header = rows[h].map((c, i) => String(c).trim() || `Column ${i + 1}`), data = rows.slice(h + 1).filter(r => r.some(c => String(c).trim()));
+  state.stmt = { header, data };
+  const find = re => header.findIndex(c => re.test(c));
+  const g = { date: find(/date/i), desc: find(/narration|description|particular|remark|details/i), ref: find(/ref|chq|cheque|utr/i), amt: find(/^amount|amount$/i), cr: find(/deposit|credit|cr\b|money in/i), dr: find(/withdraw|debit|dr\b|money out/i) };
+  const opt = (sel, none) => (none ? `<option value="-1">${none}</option>` : '') + header.map((c, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${esc(c)}</option>`).join('');
+  $('bk-map').innerHTML = `<div class="fb-card"><h4>Which columns are which?</h4><p class="small muted" style="margin-bottom:8px">Found ${data.length} rows. We guessed the columns; check them against the preview.</p>
+    <div class="grid g3" style="gap:10px"><div class="field"><label>Date</label><select class="input" id="mp-date" onchange="stmtPreview()">${opt(g.date)}</select></div>
+      <div class="field"><label>Description</label><select class="input" id="mp-desc" onchange="stmtPreview()">${opt(g.desc, 'None')}</select></div>
+      <div class="field"><label>Reference</label><select class="input" id="mp-ref" onchange="stmtPreview()">${opt(g.ref, 'None')}</select></div></div>
+    <div class="field"><label>Amounts</label><div class="seg" id="mp-mode"><button class="${g.cr >= 0 && g.dr >= 0 ? 'on' : ''}" data-m="split" onclick="setStmtMode('split')">Separate money in and money out columns</button><button class="${g.cr >= 0 && g.dr >= 0 ? '' : 'on'}" data-m="one" onclick="setStmtMode('one')">One amount column (money out is negative)</button></div></div>
+    <div class="grid g2" style="gap:10px" id="mp-split"><div class="field"><label>Money in (deposits, credits)</label><select class="input" id="mp-cr" onchange="stmtPreview()">${opt(g.cr, 'None')}</select></div>
+      <div class="field"><label>Money out (withdrawals, debits)</label><select class="input" id="mp-dr" onchange="stmtPreview()">${opt(g.dr, 'None')}</select></div></div>
+    <div class="field" id="mp-one"><label>Amount</label><select class="input" id="mp-amt" onchange="stmtPreview()">${opt(g.amt, 'None')}</select></div></div>
+    <div id="mp-prev"></div>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" id="mp-go" onclick="doImport()">Import lines</button></div>`;
+  setStmtMode(g.cr >= 0 && g.dr >= 0 ? 'split' : 'one');
+}
+function setStmtMode(m) { document.querySelectorAll('#mp-mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('mp-split').style.display = m === 'split' ? '' : 'none'; $('mp-one').style.display = m === 'one' ? '' : 'none'; stmtPreview(); }
+function stmtLines() {
+  const v = id => +$(id).value, mode = document.querySelector('#mp-mode button.on').dataset.m, cell = (r, i) => i >= 0 ? r[i] : '';
+  return state.stmt.data.map(r => ({ date: parseStmtDate(cell(r, v('mp-date'))), description: String(cell(r, v('mp-desc')) || '').trim(), reference: String(cell(r, v('mp-ref')) || '').trim(),
+    amount: Math.round((mode === 'split' ? Math.abs(parseAmt(cell(r, v('mp-cr')))) - Math.abs(parseAmt(cell(r, v('mp-dr')))) : parseAmt(cell(r, v('mp-amt')))) * 100) / 100 }));
+}
+function stmtPreview() {
+  const all = stmtLines(), ok = all.filter(l => l.date && l.amount);
+  $('mp-prev').innerHTML = `<h4 style="margin:10px 0 6px">Preview</h4><p class="small muted">${ok.length} of ${all.length} rows look valid${all.length - ok.length ? '; the rest have no date or amount (like opening balance rows) and will be skipped' : ''}.</p>
+    <div class="table-wrap"><table><tbody>${ok.slice(0, 6).map(l => `<tr><td>${prettyDate(l.date)}</td><td class="small">${esc(l.description)}</td><td class="small muted">${esc(l.reference)}</td><td style="text-align:right;color:${l.amount >= 0 ? 'var(--leaf)' : 'var(--red)'}"><b>${l.amount >= 0 ? '+' : '−'}${inr(Math.abs(l.amount))}</b></td></tr>`).join('')}</tbody></table></div>`;
+}
+async function doImport() {
+  const lines = stmtLines().filter(l => l.date && l.amount);
+  if (!lines.length) return toast('No valid rows to import. Check the column choices.', 'err');
+  $('mp-go').disabled = true;
+  const { data, error } = await db.rpc('import_bank_lines', { p_staff_id: String(state.me.id), p_pin: state.pin, p_account_id: String(state.books.bank), p_lines: lines });
+  if (error) { $('mp-go').disabled = false; return toast(error.message, 'err'); }
+  closeModal(); toast(`${data.added} lines imported${data.skipped ? `, ${data.skipped} already there` : ''}`, 'ok'); state.books.bankTab = 'open'; booksBank();
+}
+
+/* ---------- chart of accounts ---------- */
+async function booksCOA() {
+  const all = await totals(null, null, null);
+  if (booksStale('coa')) return;
+  const A = state.cache.accounts.filter(a => state.books.coaArchived || a.is_active);
+  const sub = (t, s) => (SUBTYPES[t] || []).find(x => x[0] === s)?.[1] || s;
+  $('books-body').innerHTML = `<div class="period"><span class="muted small">Balances are all-time, across every outlet.</span>
+      <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" ${state.books.coaArchived ? 'checked' : ''} onchange="state.books.coaArchived=this.checked;booksCOA()"> Show archived</label>
+      <span class="spacer"></span>${canBooks() ? '<button class="btn berry" onclick="accountModal()">+ Add account</button>' : ''}</div>
+    ${ACCT_TYPES.map(([t, l]) => { const list = A.filter(a => a.type === t); return `<div class="panel" style="margin-bottom:14px"><h3>${l}</h3><div class="table-wrap"><table><tbody>
+      ${list.map(a => `<tr style="${a.is_active ? '' : 'opacity:.5'}"><td style="width:70px" class="muted">${esc(a.code)}</td>
+        <td><b>${esc(a.name)}</b>${a.system_key ? ' <span class="pill" title="Used by automatic posting">Auto</span>' : ''}${a.is_bank ? ' <span class="pill navy">Bank</span>' : ''}${a.is_active ? '' : ' <span class="pill">Archived</span>'}
+          <div class="small muted">${esc(sub(t, a.subtype))}${a.category_key ? `, receives "${esc(catInfo(a.category_key)[2])}" bills` : ''}${a.description ? `, ${esc(a.description)}` : ''}</div></td>
+        <td style="text-align:right">${money(bal(a, all[String(a.id)]), true)}</td>
+        <td style="text-align:right;white-space:nowrap"><button class="btn ghost sm" onclick="state.books.gl='${esc(a.id)}';state.books.report='gl';state.books.tab='reports';RENDER.books()">Transactions</button>${canBooks() ? ` <button class="btn ghost sm" onclick="accountModal('${esc(a.id)}')">Edit</button>` : ''}</td></tr>`).join('') || `<tr><td class="muted">No ${l.toLowerCase()} accounts</td></tr>`}
+    </tbody></table></div></div>`; }).join('')}`;
+}
+function accountModal(id) {
+  const a = id ? acct(id) : { type: 'expense', subtype: 'operating', is_active: true };
+  openModal(`<h2>${id ? 'Edit account' : 'Add an account'}</h2><p class="sub">${a.system_key ? 'Used by automatic posting, so the type is fixed. You can rename it.' : 'Accounts group your money in and out for the reports.'}</p>
+    <div class="grid g3" style="gap:10px"><div class="field"><label for="ac-code">Code</label><input class="input" id="ac-code" value="${esc(a.code || '')}" placeholder="6070"></div>
+      <div class="field span2"><label for="ac-name">Name</label><input class="input" id="ac-name" value="${esc(a.name || '')}" placeholder="Staff food"></div></div>
+    <div class="grid g2" style="gap:10px"><div class="field"><label for="ac-type">Type</label><select class="input" id="ac-type" ${a.system_key ? 'disabled' : ''} onchange="acSubtypes()">${ACCT_TYPES.map(([t, l]) => `<option value="${t}" ${a.type === t ? 'selected' : ''}>${l.replace(/s$/, '').replace('Equitie', 'Equity')}</option>`).join('')}</select></div>
+      <div class="field"><label for="ac-sub">Kind</label><select class="input" id="ac-sub" data-cur="${esc(a.subtype || '')}"></select></div></div>
+    <div class="field" id="ac-bank-wrap"><label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="ac-bank" ${a.is_bank ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--berry)"> This is a bank or cash account (shows in Bank for reconciliation and as a "paid from" option)</label></div>
+    <div class="field" id="ac-cat-wrap"><label for="ac-cat">Bills that land here</label><select class="input" id="ac-cat" ${a.system_key ? 'disabled' : ''}><option value="">None (pick it per bill)</option>${EXPENSE_CATS.map(([v, ic, l]) => `<option value="${esc(v)}" ${a.category_key === v ? 'selected' : ''}>${ic} ${l}</option>`).join('')}</select></div>
+    <div class="field"><label for="ac-desc">Description</label><input class="input" id="ac-desc" value="${esc(a.description || '')}"></div>
+    ${id && !a.system_key ? `<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="ac-active" ${a.is_active ? '' : 'checked'} style="width:18px;height:18px;accent-color:var(--berry)"> Archive this account (only if its balance is zero)</label>` : ''}
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" onclick="saveAccount(${id ? `'${esc(id)}'` : 'null'})">Save account</button></div>`);
+  acSubtypes();
+}
+function acSubtypes() { const t = $('ac-type').value, sel = $('ac-sub'), cur = sel.value || sel.dataset.cur; sel.innerHTML = SUBTYPES[t].map(([k, l]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${l}</option>`).join(''); $('ac-bank-wrap').style.display = t === 'asset' ? '' : 'none'; $('ac-cat-wrap').style.display = t === 'expense' ? '' : 'none'; }
+async function saveAccount(id) {
+  const t = $('ac-type').value;
+  const p = { code: $('ac-code').value.trim(), name: $('ac-name').value.trim(), type: t, subtype: $('ac-sub').value, is_bank: t === 'asset' && $('ac-bank').checked,
+    category_key: t === 'expense' ? $('ac-cat').value : '', description: $('ac-desc').value.trim(), is_active: !($('ac-active')?.checked) };
+  const { error } = await db.rpc('save_account', { p_staff_id: String(state.me.id), p_pin: state.pin, p_account_id: id, p_account: p });
+  if (error) return toast(error.message, 'err'); closeModal(); toast('Account saved', 'ok'); await loadBooksBase(true); booksCOA();
+}
+/* ---------- reports ---------- */
+const REPORTS = [['pnl', 'Profit & loss'], ['bs', 'Balance sheet'], ['tb', 'Trial balance'], ['gl', 'Account transactions'], ['gst', 'GST summary'], ['ap', 'Payables ageing']];
+async function booksReports() {
+  const R = state.books.report, b = $('books-body');
+  b.innerHTML = `<div class="chips" style="margin-bottom:12px">${REPORTS.map(([k, l]) => `<button class="chip ${R === k ? 'on' : ''}" onclick="state.books.report='${k}';booksReports()">${l}</button>`).join('')}</div>
+    ${periodBar('books', `${R === 'pnl' && isAll() ? `<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" ${state.books.byOutlet ? 'checked' : ''} onchange="state.books.byOutlet=this.checked;booksReports()"> Outlets side by side</label>` : ''}<button class="btn ghost sm" onclick="exportXLSX(state.cache.report || [], 'report')">Download</button>`)}
+    ${['bs', 'tb'].includes(R) ? `<p class="small muted" style="margin:-8px 0 12px">As at ${longDate(range('books').e)}.</p>` : ''}
+    <div id="rp-body">${LOADING}</div>
+    ${!isAll() && !['bs', 'tb'].includes(R) ? '<p class="small muted" style="margin-top:10px">Entries not tied to an outlet (like a company-wide journal) only show when "All outlets" is picked at the top.</p>' : ''}`;
+  await ({ pnl: rPnL, bs: rBS, tb: rTB, gl: rGL, gst: rGST, ap: rAP })[R]();
+}
+const rStale = k => booksStale('reports') || state.books.report !== k;
+function rTable(cols, rows) {
+  return `<div class="table-wrap"><table><thead><tr><th></th>${cols.map(c => `<th style="text-align:right">${esc(c)}</th>`).join('')}</tr></thead><tbody>
+    ${rows.map(r => r.head ? `<tr><td colspan="${cols.length + 1}" style="padding-top:18px"><b style="font-size:15px">${esc(r.head)}</b></td></tr>`
+      : `<tr style="${r.total ? 'border-top:2px solid var(--navy);font-weight:800' : ''}${r.big ? ';background:var(--cream)' : ''}"><td style="${r.total ? '' : 'padding-left:22px'}">${r.link ? `<a href="#" onclick="state.books.gl='${esc(r.link)}';state.books.report='gl';booksReports();return false" style="color:inherit">${esc(r.label)}</a>` : esc(r.label)}</td>${r.vals.map(v => `<td style="text-align:right">${typeof v === 'string' ? v : money(v, r.total)}</td>`).join('')}</tr>`).join('')}
+  </tbody></table></div>`;
+}
+async function rPnL() {
+  const r = range('books'), A = state.cache.accounts, split = isAll() && state.books.byOutlet;
+  let cols, val;
+  if (split) {
+    const { data, error } = await db.rpc('account_totals_by_store', { p_from: r.s, p_to: r.e, p_store_ids: ledgerStores() });
+    if (fail(error, 'Loading report') || rStale('pnl')) return;
+    const stores = [...new Set((data || []).map(x => String(x.store_id)))].sort((a, b) => (storeById(a)?.name || 'zz').localeCompare(storeById(b)?.name || 'zz'));
+    cols = [...stores.map(s => storeById(s)?.name || 'No outlet'), 'Total'];
+    val = (a, i) => { const rows = (data || []).filter(x => sameId(x.account_id, a.id) && (i === stores.length || String(x.store_id) === stores[i])); return sum(rows, x => bal(a, x)); };
+  } else {
+    const t = await totals(r.s, r.e); if (rStale('pnl')) return;
+    cols = ['Amount', '% of income']; val = (a, i) => i === 0 ? bal(a, t[String(a.id)]) : null;
+  }
+  const n = cols.length - (split ? 0 : 1), idx = [...Array(n).keys()];
+  const sumOf = list => idx.map(i => sum(list, a => val(a, i)));
+  const inc = A.filter(a => a.type === 'income'), cogs = A.filter(a => a.type === 'expense' && a.subtype === 'cogs'), opex = A.filter(a => a.type === 'expense' && a.subtype !== 'cogs');
+  const nz = list => list.filter(a => idx.some(i => Math.abs(val(a, i)) >= .005));
+  const I = sumOf(inc), C = sumOf(cogs), O = sumOf(opex), G = idx.map(i => I[i] - C[i]), N = idx.map(i => G[i] - O[i]);
+  const withPct = (v, base) => split ? v : [...v, base[0] ? `${Math.round(v[0] / base[0] * 1000) / 10}%` : ''];
+  const line = a => ({ label: `${a.code} ${a.name}`, link: a.id, vals: withPct(idx.map(i => val(a, i)), I) });
+  const rows = [{ head: 'Income' }, ...nz(inc).map(line), { label: 'Total income', total: 1, vals: withPct(I, I) },
+    { head: 'Cost of goods sold' }, ...nz(cogs).map(line), { label: 'Total cost of goods', total: 1, vals: withPct(C, I) },
+    { label: 'Gross profit', total: 1, big: 1, vals: withPct(G, I) },
+    { head: 'Operating expenses' }, ...nz(opex).map(line), { label: 'Total operating expenses', total: 1, vals: withPct(O, I) },
+    { label: 'Net profit', total: 1, big: 1, vals: withPct(N, I) }];
+  $('rp-body').innerHTML = `<div class="panel"><h3>Profit &amp; loss</h3><p class="sub">${esc(scopeLabel())}, ${prettyDate(r.s)} to ${prettyDate(r.e)}. Click an account to see its transactions.</p>${rTable(cols, rows)}</div>`;
+  state.cache.report = rows.filter(x => !x.head).map(x => Object.fromEntries([['Account', x.label], ...cols.map((c, i) => [c, typeof x.vals[i] === 'number' ? Math.round(x.vals[i] * 100) / 100 : x.vals[i]])]));
+}
+async function rBS() {
+  const r = range('books'), A = state.cache.accounts, t = await totals(null, r.e, null); if (rStale('bs')) return;
+  const v = a => bal(a, t[String(a.id)]), nz = l => l.filter(a => Math.abs(v(a)) >= .005);
+  const as = A.filter(a => a.type === 'asset'), li = A.filter(a => a.type === 'liability'), eq = A.filter(a => a.type === 'equity');
+  const profit = sum(A.filter(a => a.type === 'income'), v) - sum(A.filter(a => a.type === 'expense'), v);
+  const TA = sum(as, v), TL = sum(li, v), TE = sum(eq, v) + profit;
+  const line = a => ({ label: `${a.code} ${a.name}`, link: a.id, vals: [v(a)] });
+  const rows = [{ head: 'Assets' }, ...nz(as).map(line), { label: 'Total assets', total: 1, big: 1, vals: [TA] },
+    { head: 'Liabilities' }, ...nz(li).map(line), { label: 'Total liabilities', total: 1, vals: [TL] },
+    { head: 'Equity' }, ...nz(eq).map(line), { label: 'Profit to date (not yet moved to retained earnings)', vals: [profit] }, { label: 'Total equity', total: 1, vals: [TE] },
+    { label: 'Total liabilities and equity', total: 1, big: 1, vals: [TL + TE] }];
+  const ok = Math.round(TA * 100) === Math.round((TL + TE) * 100);
+  $('rp-body').innerHTML = `<div class="panel"><div class="row"><h3>Balance sheet</h3><span class="spacer"></span>${ok ? '<span class="pill ok">Balanced</span>' : `<span class="pill out">Off by ${inr(Math.abs(TA - TL - TE))}</span>`}</div>
+    <p class="sub">Whole business, as at ${longDate(r.e)}. A balance sheet always covers every outlet, because bank, capital and loans belong to the business as a whole.</p>${rTable(['Amount'], rows)}</div>`;
+  state.cache.report = rows.filter(x => !x.head).map(x => ({ Account: x.label, Amount: Math.round(x.vals[0] * 100) / 100 }));
+}
+async function rTB() {
+  const r = range('books'), A = state.cache.accounts, t = await totals(null, r.e, null); if (rStale('tb')) return;
+  const rows = A.map(a => { const x = t[String(a.id)]; const net = x ? Number(x.debit) - Number(x.credit) : 0; return { a, dr: net > 0 ? net : 0, cr: net < 0 ? -net : 0 }; }).filter(x => x.dr || x.cr);
+  const D = sum(rows, x => x.dr), C = sum(rows, x => x.cr);
+  $('rp-body').innerHTML = `<div class="panel"><div class="row"><h3>Trial balance</h3><span class="spacer"></span>${Math.round(D * 100) === Math.round(C * 100) ? '<span class="pill ok">Debits equal credits</span>' : '<span class="pill out">Not equal</span>'}</div>
+    <p class="sub">Whole business, as at ${longDate(r.e)}.</p>
+    <div class="table-wrap"><table><thead><tr><th>Account</th><th>Type</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th></tr></thead><tbody>
+    ${rows.map(x => `<tr><td><a href="#" style="color:inherit" onclick="state.books.gl='${esc(x.a.id)}';state.books.report='gl';booksReports();return false">${esc(x.a.code)} ${esc(x.a.name)}</a></td><td class="small muted">${x.a.type}</td><td style="text-align:right">${x.dr ? inr(x.dr) : ''}</td><td style="text-align:right">${x.cr ? inr(x.cr) : ''}</td></tr>`).join('')}
+    <tr style="border-top:2px solid var(--navy);font-weight:800"><td>Total</td><td></td><td style="text-align:right">${inr(D)}</td><td style="text-align:right">${inr(C)}</td></tr></tbody></table></div></div>`;
+  state.cache.report = rows.map(x => ({ Code: x.a.code, Account: x.a.name, Type: x.a.type, Debit: Math.round(x.dr * 100) / 100, Credit: Math.round(x.cr * 100) / 100 }));
+}
+async function rGL() {
+  const r = range('books'); if (!acct(state.books.gl)) state.books.gl = String(acctByKey('bank')?.id || state.cache.accounts[0]?.id);
+  const a = acct(state.books.gl);
+  const [open, { data, error }] = await Promise.all([totals(null, addDays(r.s, -1)), db.rpc('account_ledger', { p_account: a.id, p_from: r.s, p_to: r.e, p_store_ids: ledgerStores(), p_only_open: false })]);
+  if (fail(error, 'Loading transactions') || rStale('gl')) return;
+  let run = bal(a, open[String(a.id)]); const start = run, sign = natural(a) ? 1 : -1;
+  const rows = (data || []).map(x => { run += sign * (Number(x.debit) - Number(x.credit)); return { ...x, run }; });
+  $('rp-body').innerHTML = `<div class="panel"><div class="row" style="margin-bottom:10px"><h3 style="margin:0">Account transactions</h3><span class="spacer"></span>
+      <select class="input" style="max-width:320px" onchange="state.books.gl=this.value;booksReports()">${acctOptions(a.id, () => true, 'Pick an account')}</select></div>
+    <div class="table-wrap"><table><thead><tr><th>Date</th><th>No.</th><th>Description</th><th>Outlet</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Balance</th></tr></thead><tbody>
+      <tr style="background:var(--cream)"><td colspan="6"><b>Opening balance</b></td><td style="text-align:right">${money(start, true)}</td></tr>
+      ${rows.map(x => `<tr><td>${prettyDate(x.entry_date)}</td><td class="small muted">J-${x.journal_no}</td><td>${esc(x.narration || '')}${x.description && x.description !== x.narration ? `<div class="small muted">${esc(x.description)}</div>` : ''}</td>
+        <td class="small">${esc(storeById(x.store_id)?.name || '—')}</td><td style="text-align:right">${Number(x.debit) ? inr(x.debit) : ''}</td><td style="text-align:right">${Number(x.credit) ? inr(x.credit) : ''}</td><td style="text-align:right">${money(x.run)}</td></tr>`).join('')}
+      <tr style="border-top:2px solid var(--navy);font-weight:800"><td colspan="4">Closing balance</td><td style="text-align:right">${inr(sum(rows, x => x.debit))}</td><td style="text-align:right">${inr(sum(rows, x => x.credit))}</td><td style="text-align:right">${money(run, true)}</td></tr>
+    </tbody></table></div>${rows.length >= 3000 ? '<p class="small muted">Showing the first 3,000 lines. Narrow the dates to see the rest.</p>' : ''}</div>`;
+  state.cache.report = rows.map(x => ({ Date: x.entry_date, Journal: 'J-' + x.journal_no, Description: x.narration, Outlet: storeById(x.store_id)?.name || '', Debit: Number(x.debit), Credit: Number(x.credit), Balance: Math.round(x.run * 100) / 100 }));
+}
+async function rGST() {
+  const r = range('books'), S = state.cache.acctSettings, t = await totals(r.s, r.e); if (rStale('gst')) return;
+  const o = acctByKey('gst_output'), i = acctByKey('gst_input'), out = bal(o, t[String(o.id)]), inp = bal(i, t[String(i.id)]);
+  $('rp-body').innerHTML = `<div class="panel"><h3>GST summary</h3><p class="sub">${esc(scopeLabel())}, ${prettyDate(r.s)} to ${prettyDate(r.e)}. ${S.gst_registered === 'true' ? `Sale prices include GST at ${esc(S.sales_gst_rate)}%.${S.gstin ? ` GSTIN ${esc(S.gstin)}.` : ''}` : 'GST is switched off in Settings, so sales carry no GST.'}</p>
+    ${rTable(['Amount'], [{ label: 'GST collected on sales (output tax)', vals: [out] }, { label: 'GST paid on bills (input credit)', vals: [inp] }, { label: out - inp >= 0 ? 'GST to pay' : 'GST credit to carry forward', total: 1, big: 1, vals: [Math.abs(out - inp)] }])}
+    <p class="small muted" style="margin-top:10px">Share this with your CA for GSTR-3B. Input credit only counts bills where the GST amount was entered (by an admin or accountant on the bill).</p></div>`;
+  state.cache.report = [{ Item: 'GST collected on sales', Amount: out }, { Item: 'GST input credit on bills', Amount: inp }, { Item: 'Net', Amount: out - inp }];
+}
+async function rAP() {
+  const r = range('books');
+  const rows = await fetchAll(() => db.from('expenses').select('id, amount, vendor, submitted_by, payment_mode, bill_date, created_at, store_id').eq('status', 'approved').in('store_id', storeFilterIds()), 'Loading payables');
+  if (rStale('ap')) return;
+  const B = [['Up to 30 days', 0, 30], ['31 to 60', 31, 60], ['61 to 90', 61, 90], ['Over 90', 91, 1e9]];
+  const m = {};
+  rows.forEach(e => { const who = /personal/i.test(e.payment_mode || '') ? `Staff: ${e.submitted_by || ''}` : (e.vendor || 'Unnamed vendor');
+    const age = daysBetween(e.bill_date || ist(e.created_at).date, r.e) - 1, k = B.findIndex(b => age >= b[1] && age <= b[2]);
+    const x = m[who] = m[who] || { who, b: [0, 0, 0, 0], n: 0 }; x.b[Math.max(0, k)] += Number(e.amount); x.n++; });
+  const list = Object.values(m).sort((a, b) => sum(b.b, v => v) - sum(a.b, v => v)), tot = [0, 1, 2, 3].map(i => sum(list, x => x.b[i]));
+  $('rp-body').innerHTML = `<div class="panel"><h3>Payables ageing</h3><p class="sub">Approved bills not yet paid, by how old the bill is on ${longDate(r.e)}. Pay them from Bills &amp; expenses.</p>
+    <div class="grid g4" style="margin-bottom:14px">${B.map((b, i) => kpi(b[0], inr(tot[i]), '', ['var(--leaf)', 'var(--mango)', 'var(--orange)', 'var(--red)'][i])).join('')}</div>
+    ${list.length ? `<div class="table-wrap"><table><thead><tr><th>Pay to</th><th style="text-align:right">Bills</th>${B.map(b => `<th style="text-align:right">${b[0]}</th>`).join('')}<th style="text-align:right">Total</th></tr></thead><tbody>
+      ${list.map(x => `<tr><td><b>${esc(x.who)}</b></td><td style="text-align:right">${x.n}</td>${x.b.map(v => `<td style="text-align:right">${v ? inr(v) : '<span class="muted">—</span>'}</td>`).join('')}<td style="text-align:right" class="money">${inr(sum(x.b, v => v))}</td></tr>`).join('')}
+      <tr style="border-top:2px solid var(--navy);font-weight:800"><td>Total</td><td style="text-align:right">${rows.length}</td>${tot.map(v => `<td style="text-align:right">${inr(v)}</td>`).join('')}<td style="text-align:right">${inr(sum(tot, v => v))}</td></tr></tbody></table></div>` : emptyState('Nothing owed', 'Every approved bill has been paid.')}</div>`;
+  state.cache.report = list.map(x => ({ 'Pay to': x.who, Bills: x.n, ...Object.fromEntries(B.map((b, i) => [b[0], x.b[i]])), Total: sum(x.b, v => v) }));
+}
+
+/* ---------- settings ---------- */
+function booksSettings() {
+  const S = state.cache.acctSettings;
+  $('books-body').innerHTML = `<div class="grid g2" style="align-items:start">
+    <div class="panel"><h3>Lock date</h3><p class="sub">Nothing dated on or before this day can be added, edited or voided, by anyone. Lock each month once it's reconciled and reported, the way Xero and Zoho do.</p>
+      <div class="row"><input class="input" type="date" id="st-lock" style="max-width:200px" max="${addDays(todayIST(), -1)}" value="${esc(S.lock_date || '')}" ${isAdmin() ? '' : 'disabled'}>
+        ${isAdmin() ? '<button class="btn" onclick="saveLock()">Save lock date</button>' : '<span class="small muted">Only admins can change this.</span>'}</div>
+      <p class="small muted" style="margin-top:8px">${S.lock_date ? `Currently locked up to ${longDate(S.lock_date)}.` : 'No lock date set yet.'}</p>
+      <h3 style="margin-top:20px">GST</h3><p class="sub">When on, every new sale is split into sales and GST collected. Past sales aren't changed.</p>
+      <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><input type="checkbox" id="st-gst" ${S.gst_registered === 'true' ? 'checked' : ''} ${canBooks() ? '' : 'disabled'} style="width:18px;height:18px;accent-color:var(--berry)"> We are GST registered</label>
+      <div class="grid g2" style="gap:10px"><div class="field"><label for="st-rate">GST rate on sales (%)</label><input class="input" id="st-rate" type="number" value="${esc(S.sales_gst_rate || '5')}" ${canBooks() ? '' : 'disabled'}></div>
+        <div class="field"><label for="st-gstin">GSTIN</label><input class="input" id="st-gstin" value="${esc(S.gstin || '')}" ${canBooks() ? '' : 'disabled'}></div></div>
+      ${canBooks() ? '<button class="btn" onclick="saveGst()">Save GST settings</button>' : ''}
+    </div>
+    <div class="panel"><h3>What gets recorded automatically</h3><p class="sub">Every entry balances. You never need to post these by hand.</p>
+      <div class="table-wrap"><table><thead><tr><th>When</th><th>Debit</th><th>Credit</th></tr></thead><tbody>
+        <tr><td>Cash sale</td><td>Cash in drawer</td><td>Juice sales (and GST if on)</td></tr>
+        <tr><td>UPI or card sale</td><td>UPI or card to be settled</td><td>Juice sales (and GST if on)</td></tr>
+        <tr><td>Discount on a sale</td><td>Discounts given</td><td>Juice sales</td></tr>
+        <tr><td>Bill approved</td><td>Expense account for its category (and GST input)</td><td>Bills to pay, or Owed to staff if they paid</td></tr>
+        <tr><td>Bill paid</td><td>Bills to pay, or Owed to staff</td><td>The bank or cash account it was paid from</td></tr>
+        <tr><td>Sale voided, bill edited or reopened</td><td colspan="2">The old entry is voided and a corrected one is posted</td></tr>
+        <tr><td>UPI or card settlement reaches the bank</td><td>Bank account</td><td>UPI or card to be settled (create it from the bank statement line)</td></tr>
+      </tbody></table></div>
+      <p class="small muted" style="margin-top:10px">Stock restocks only change quantities. Enter what you paid for stock as a bill, so it isn't counted twice.</p></div>
+  </div>`;
+}
+async function saveBookSetting(key, value) {
+  const { error } = await db.rpc('set_accounting_setting', { p_staff_id: String(state.me.id), p_pin: state.pin, p_key: key, p_value: value || '' });
+  if (error) { toast(error.message, 'err'); return false; } return true;
+}
+async function saveLock() {
+  const v = $('st-lock').value;
+  if (v && !(await confirmBox('Lock the books?', `Nothing dated on or before ${longDate(v)} can be added, changed or voided by anyone until you move this date.`, 'Lock'))) return;
+  if (await saveBookSetting('lock_date', v)) { toast(v ? `Books locked up to ${prettyDate(v)}` : 'Lock date removed', 'ok'); RENDER.books(); }
+}
+async function saveGst() {
+  if (!(await saveBookSetting('gst_registered', $('st-gst').checked ? 'true' : 'false'))) return;
+  if (!(await saveBookSetting('sales_gst_rate', $('st-rate').value.trim() || '0'))) return;
+  if (!(await saveBookSetting('gstin', $('st-gstin').value.trim().toUpperCase()))) return;
+  toast('GST settings saved', 'ok'); RENDER.books();
+}
+
+/* ---------- bills: admin edit and accountant coding ---------- */
+async function editBillModal(id) {
+  await loadBooksBase();
+  const e = state.cache.bills.find(x => sameId(x.id, id)); if (!e) return;
+  openModal(`<h2>Edit bill</h2><p class="sub">Admin only. Every change is saved in the bill's history with your reason, and the books update automatically.${e.status === 'paid' ? ' This bill is paid, so the amount is fixed; change its status to Approved first to change the amount.' : ''}</p>
+    <div class="grid g2" style="gap:10px"><div class="field"><label for="eb-store">For</label><select class="input" id="eb-store">${storeOptions(e.store_id, { scoped: true })}</select></div>
+      <div class="field"><label for="eb-cat">Category</label><select class="input" id="eb-cat">${EXPENSE_CATS.map(([v, ic, l]) => `<option value="${esc(v)}" ${e.category === v ? 'selected' : ''}>${ic} ${l}</option>`).join('')}</select></div></div>
+    <div class="grid g3" style="gap:10px"><div class="field"><label for="eb-amt">Amount</label><input class="input" id="eb-amt" type="number" step="0.01" value="${esc(e.amount)}" ${e.status === 'paid' ? 'disabled' : ''}></div>
+      <div class="field"><label for="eb-gst">GST in this amount</label><input class="input" id="eb-gst" type="number" step="0.01" value="${esc(e.gst_amount || 0)}"></div>
+      <div class="field"><label for="eb-date">Bill date</label><input class="input" id="eb-date" type="date" max="${todayIST()}" value="${esc(e.bill_date || '')}"></div></div>
+    <div class="grid g2" style="gap:10px"><div class="field"><label for="eb-vendor">Vendor</label><input class="input" id="eb-vendor" value="${esc(e.vendor || '')}"></div>
+      <div class="field"><label for="eb-inv">Invoice number</label><input class="input" id="eb-inv" value="${esc(e.invoice_no || '')}"></div></div>
+    <div class="grid g2" style="gap:10px"><div class="field"><label for="eb-pay">Paid at the time with</label><select class="input" id="eb-pay">${PAY_OUT.map(([v, l]) => `<option value="${esc(v)}" ${e.payment_mode === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="field"><label for="eb-acct">Expense account</label><select class="input" id="eb-acct">${acctOptions(e.account_id, a => a.type === 'expense', 'Default for the category')}</select></div></div>
+    <div class="field"><label for="eb-notes">Note</label><input class="input" id="eb-notes" value="${esc(e.notes || '')}"></div>
+    <div class="field"><label for="eb-file">Replace bill photo</label><input class="input" id="eb-file" type="file" accept="image/*,application/pdf"></div>
+    <div class="field"><label for="eb-reason">Reason for the change (required)</label><input class="input" id="eb-reason" placeholder="Vendor name was misspelt"></div>
+    <div class="modal-actions"><button class="btn ghost" onclick="billModal('${esc(e.id)}')">Back</button><button class="btn berry" id="eb-go" onclick="saveBillEdit('${esc(e.id)}')">Save changes</button></div>`, true);
+}
+async function saveBillEdit(id) {
+  const reason = $('eb-reason').value.trim(); if (!reason) return toast('Add a reason for the change', 'err');
+  $('eb-go').disabled = true;
+  const photo = $('eb-file').files[0] ? await upload($('eb-file'), 'receipts') : null;
+  const { error } = await db.rpc('admin_edit_expense', { p_admin_id: String(state.me.id), p_admin_pin: state.pin, p_expense_id: String(id), p_reason: reason, p_bill: {
+    store_id: $('eb-store').value, category: $('eb-cat').value, amount: parseFloat($('eb-amt').value), gst_amount: parseFloat($('eb-gst').value) || 0, bill_date: $('eb-date').value,
+    vendor: $('eb-vendor').value.trim(), invoice_no: $('eb-inv').value.trim(), payment_mode: $('eb-pay').value, account_id: $('eb-acct').value, notes: $('eb-notes').value.trim(), receipt_url: photo } });
+  if (error) { $('eb-go').disabled = false; return toast(error.message, 'err'); }
+  toast('Bill updated. The books were adjusted automatically.', 'ok'); await RENDER.expense(); billModal(id); refreshBillBadge();
+}
+async function recodeBill(id) {
+  const { error } = await db.rpc('recode_expense', { p_staff_id: String(state.me.id), p_pin: state.pin, p_expense_id: String(id), p_account_id: $('rc-acct').value, p_gst_amount: parseFloat($('rc-gst').value) || 0, p_note: $('rc-note').value.trim() });
+  if (error) return toast(error.message, 'err'); toast('Accounting details saved', 'ok'); await RENDER.expense(); billModal(id);
+}
+
+/* =========================================================
    USERS & ACCESS (admin only). Every change is checked and
    logged inside the database.
    ========================================================= */
@@ -2172,7 +2745,7 @@ function drawUsers() {
         <div class="seg" style="flex:0 1 auto">${[['active', 'Active'], ['locked', 'Locked'], ['pin', 'Temp PIN'], ['inactive', 'Deactivated'], ['all', 'All']].map(([k, l]) => `<button class="${f.status === k ? 'on' : ''}" onclick="state.users.status='${k}';drawUsers()">${l}</button>`).join('')}</div>
         <span class="spacer"></span><button class="btn ghost sm" onclick="exportUsers()">Download</button><button class="btn berry" onclick="userModal()">+ Add user</button>
       </div>
-      <div class="chips" style="margin-bottom:8px">${[['all', 'Everyone'], ['admin', 'Admins'], ['Barista', 'Baristas'], ['Store manager', 'Store managers'], ['Finance', 'Finance'], ['Approver', 'Approvers'], ['Custom access', 'Custom']].map(([k, l]) => `<button class="chip ${f.role === k ? 'on' : ''}" onclick="state.users.role='${esc(k)}';drawUsers()">${l}</button>`).join('')}</div>
+      <div class="chips" style="margin-bottom:8px">${[['all', 'Everyone'], ['admin', 'Admins'], ['Barista', 'Baristas'], ['Store manager', 'Store managers'], ['Finance', 'Finance'], ['Approver', 'Approvers'], ['Accountant', 'Accountants'], ['Custom access', 'Custom']].map(([k, l]) => `<button class="chip ${f.role === k ? 'on' : ''}" onclick="state.users.role='${esc(k)}';drawUsers()">${l}</button>`).join('')}</div>
       ${list.length ? `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Access</th><th>Outlets</th><th>Last sign-in</th><th>Status</th><th></th></tr></thead><tbody>
       ${list.map(s => { const i = all.indexOf(s), [st, cls] = userStatus(s); return `<tr style="${s.active ? '' : 'opacity:.55'}">
         <td><div class="row" style="flex-wrap:nowrap"><span style="width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px;flex-shrink:0;background:${colorFor(s.name)}">${esc(initials(s.name))}</span>
@@ -2459,7 +3032,8 @@ function makeDemoClient() {
     { id: 'u6', name: 'Kiran Goud', role: 'barista', store_id: 's1', active: false },
     { id: 'u7', name: 'Event Crew Deepa', role: 'barista', store_id: 'e2', active: true },
     { id: 'u8', name: 'Manoj Kumar', role: 'barista', store_id: 's1', active: true, permissions: ['pos', 'sales_view', 'void_bills', 'expense_submit', 'expense_approve', 'reports', 'menu', 'stock'], approval_limit: 5000 },
-    { id: 'u9', name: 'Ananya Rao', role: 'barista', store_id: null, active: true, permissions: ['expense_submit', 'expense_view_all', 'expense_approve', 'expense_pay', 'reports'], approval_limit: null }
+    { id: 'u9', name: 'Ananya Rao', role: 'barista', store_id: null, active: true, permissions: ['expense_submit', 'expense_view_all', 'expense_approve', 'expense_pay', 'reports', 'accounting_view'], approval_limit: null },
+    { id: 'u10', name: 'Kavya Iyer', role: 'barista', store_id: null, active: true, permissions: ['accounting', 'accounting_view', 'expense_view_all', 'reports'], approval_limit: null }
   ];
   T.staff.forEach(s => { if (!s.permissions) s.permissions = s.role === 'admin' ? [] : ['pos', 'sales_view', 'expense_submit']; if (s.approval_limit === undefined) s.approval_limit = null; });
   // Users: outlets, phones, sign-ins. Priya works at two outlets, Ananya at all of them.
@@ -2468,7 +3042,7 @@ function makeDemoClient() {
     const assign = { u2: ['s1'], u3: ['s1', 's2'], u4: ['s2'], u5: ['s2'], u6: ['s1'], u7: ['e2'], u8: ['s1'] };
     const phones = ['9848012345', '9849023456', '9701034567', '9866045678', '9912056789', '9440067890', '9959078901', '9885089012', '9030090123'];
     T.staff.forEach((s, k) => {
-      s.all_stores = s.role === 'admin' || s.id === 'u9';
+      s.all_stores = s.role === 'admin' || s.id === 'u9' || s.id === 'u10';
       (assign[s.id] || []).forEach(id => T.staff_stores.push({ staff_id: s.id, store_id: id }));
       s.store_id = s.all_stores ? null : (assign[s.id] || [])[0] || null;
       Object.assign(s, { phone: phones[k] || null, notes: null, must_change_pin: s.id === 'u4', failed_pin_attempts: 0,
@@ -2584,6 +3158,56 @@ function makeDemoClient() {
       }
     });
   }
+  // ---------- Accounting in the sample data ----------
+  T.accounts = [
+    ['1100','Cash in drawer','asset','cash','cash_drawer',null,true],['1110','Petty cash','asset','cash','petty_cash',null,true],
+    ['1120','UPI to be settled','asset','clearing','upi_clearing',null,false],['1130','Card to be settled','asset','clearing','card_clearing',null,false],
+    ['1200','Bank account','asset','bank','bank',null,true],['1300','GST input credit','asset','tax','gst_input',null,false],['1400','Stock on hand','asset','inventory','inventory',null,false],
+    ['1500','Kitchen equipment','asset','fixed_asset',null,null,false],['1600','Deposits paid','asset','current_asset',null,null,false],
+    ['2000','Bills to pay (vendors)','liability','payable','ap',null,false],['2010','Owed to staff','liability','payable','staff_payable',null,false],
+    ['2100','GST collected on sales','liability','tax','gst_output',null,false],['2200','Salaries payable','liability','current_liability',null,null,false],['2300','Loans','liability','loan',null,null,false],
+    ["3000","Owner's capital",'equity','equity','owner_capital',null,false],["3100","Owner's drawings",'equity','equity','drawings',null,false],['3200','Retained earnings','equity','equity','retained',null,false],
+    ['4000','Juice sales','income','sales','sales',null,false],['4100','Event and catering income','income','sales',null,null,false],['4500','Other income','income','other_income',null,null,false],
+    ['4900','Discounts given','income','contra_income','discounts',null,false],
+    ['5000','Fruits and produce','expense','cogs','exp_produce','Produce & Fruits',false],['5010','Dairy, ice and boosters','expense','cogs','exp_dairy','Dairy, Ice & Boosters',false],
+    ['5020','Cups and packaging','expense','cogs','exp_packaging','Packaging & Straws',false],['6000','Rent','expense','operating',null,null,false],['6010','Salaries and wages','expense','operating',null,null,false],
+    ['6020','Utilities and transport','expense','operating','exp_utilities','Store Utilities & Logistics',false],['6030','Repairs and maintenance','expense','operating','exp_repairs','Repairs & Kitchen Maintenance',false],
+    ['6040','Marketing','expense','operating',null,null,false],['6050','Bank and UPI charges','expense','operating',null,null,false],['6060','Event stall fees','expense','operating',null,null,false],
+    ['6900','Other expenses','expense','operating','exp_misc','Other Misc',false]
+  ].map(([code, name, type, subtype, system_key, category_key, is_bank]) => ({ id: 'a' + code, code, name, type, subtype, system_key, category_key, is_bank, is_active: true, description: null }));
+  T.accounting_settings = [{ key: 'gst_registered', value: 'false' }, { key: 'sales_gst_rate', value: '5' }, { key: 'gstin', value: '' }, { key: 'lock_date', value: '' }];
+  T.manual = []; T.bank_lines = []; const reconciled = new Set();
+  const A = k => T.accounts.find(a => a.system_key === k).id;
+  const mjAdd = (date, narration, reference, src, sid, lines, by) => { const id = nid('mj'); const j = { id, entry_date: date, narration, reference, source_type: src, source_id: sid, status: 'posted', created_by: by || 'System', created_at: new Date().toISOString() };
+    T.manual.push({ j, lines: lines.filter(l => +l.debit || +l.credit).map((l, i) => ({ id: id + '-' + i, journal_id: id, account_id: l.account_id, store_id: l.store_id || null, debit: +l.debit || 0, credit: +l.credit || 0, description: l.description || null })) }); return id; };
+  mjAdd(addDays(today, -60), 'Owner put money into the business', 'Opening', 'manual', null, [{ account_id: A('bank'), debit: 500000 }, { account_id: A('owner_capital'), credit: 500000 }], 'Sai Kumar');
+  mjAdd(addDays(today, -32), 'Rent for last month, Inorbit', 'RENT-OCT', 'manual', null, [{ account_id: 'a6000', store_id: 's1', debit: 45000 }, { account_id: A('bank'), credit: 45000 }], 'Kavya Iyer');
+  mjAdd(addDays(today, -30), 'Salaries for last month', 'SAL-OCT', 'manual', null, [{ account_id: 'a6010', store_id: 's1', debit: 62000 }, { account_id: 'a6010', store_id: 's2', debit: 38000 }, { account_id: A('bank'), credit: 100000 }], 'Kavya Iyer');
+  function demoLedger() {
+    const J = [], L = [], gstOn = T.accounting_settings.find(s => s.key === 'gst_registered').value === 'true', rate = +T.accounting_settings.find(s => s.key === 'sales_gst_rate').value || 0;
+    const add = (key, date, narration, src, sid, lines) => { const id = 'j' + key; J.push({ id, entry_date: date, narration, reference: null, source_type: src, source_id: sid, status: 'posted', created_by: 'System', created_at: date + 'T12:00:00Z' });
+      lines.filter(l => +l.debit || +l.credit).forEach((l, i) => L.push({ id: id + '-' + i, journal_id: id, account_id: l.account_id, store_id: l.store_id || null, debit: Math.round((+l.debit || 0) * 100) / 100, credit: Math.round((+l.credit || 0) * 100) / 100, description: l.description || null, reconciled: reconciled.has(id + '-' + i) })); };
+    T.orders.forEach(o => { if (o.status === 'void') return; const tot = +o.total_amount, dis = +(o.discount_amount || 0), tax = gstOn && o.gst_on !== false ? Math.round(tot * rate / (100 + rate) * 100) / 100 : 0;
+      add('s' + o.id, ist(o.created_at).date, 'Sale ' + o.receipt_no, 'sale', o.id, [{ account_id: A(o.payment_method === 'UPI' ? 'upi_clearing' : o.payment_method === 'CARD' ? 'card_clearing' : 'cash_drawer'), store_id: o.store_id, debit: tot, description: 'Paid by ' + o.payment_method },
+        { account_id: A('discounts'), store_id: o.store_id, debit: dis }, { account_id: A('sales'), store_id: o.store_id, credit: tot + dis - tax }, { account_id: A('gst_output'), store_id: o.store_id, credit: tax }]); });
+    T.expenses.forEach(e => { if (!['approved', 'paid'].includes(e.status)) return; const date = e.bill_date || ist(e.created_at).date, who = e.vendor || e.category;
+      const ea = e.account_id || (T.accounts.find(a => a.category_key === e.category) || {}).id || A('exp_misc'), liab = A(/personal/i.test(e.payment_mode || '') ? 'staff_payable' : 'ap'), g = Math.min(+e.gst_amount || 0, +e.amount);
+      add('b' + e.id, date, 'Bill: ' + who + (e.invoice_no ? ' #' + e.invoice_no : ''), 'bill', e.id, [{ account_id: ea, store_id: e.store_id, debit: e.amount - g, description: who }, { account_id: A('gst_input'), store_id: e.store_id, debit: g }, { account_id: liab, store_id: e.store_id, credit: e.amount }]);
+      if (e.status === 'paid') { const from = e.paid_from_account_id || A(/^counter cash|^cash \(counter/i.test(e.paid_method || '') ? 'cash_drawer' : e.paid_method === 'Cash' ? 'petty_cash' : 'bank');
+        add('p' + e.id, e.paid_on || date, 'Payment: ' + who, 'bill_payment', e.id, [{ account_id: liab, store_id: e.store_id, debit: e.amount }, { account_id: from, store_id: e.store_id, credit: e.amount, description: (e.paid_method || '') + (e.paid_reference ? ', ref ' + e.paid_reference : '') }]); } });
+    T.manual.forEach(m => { J.push(m.j); m.lines.forEach(l => L.push({ ...l, reconciled: reconciled.has(l.id) })); });
+    J.sort((a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at)); J.forEach((j, i) => j.journal_no = i + 1);
+    return { J, L };
+  }
+  // Sample bank statement: UPI settlements, bill payments by transfer, rent, charges.
+  {
+    const upiByDay = {}; T.orders.filter(o => o.payment_method === 'UPI' && o.status !== 'void').forEach(o => { const d = ist(o.created_at).date; upiByDay[d] = (upiByDay[d] || 0) + Number(o.total_amount); });
+    for (let k = 9; k >= 1; k--) { const d = addDays(today, -k - 1); if (upiByDay[d]) T.bank_lines.push({ id: nid('bl'), account_id: A('bank'), txn_date: addDays(d, 1), description: 'RAZORPAY UPI SETTLEMENT ' + d.replace(/-/g, ''), reference: 'RZP' + R(100000, 999999), amount: Math.round(upiByDay[d] * 100) / 100, status: 'new' }); }
+    T.expenses.filter(e => e.status === 'paid' && e.paid_method === 'Bank transfer' && e.paid_on >= addDays(today, -14)).forEach(e => T.bank_lines.push({ id: nid('bl'), account_id: A('bank'), txn_date: e.paid_on, description: 'NEFT ' + (e.paid_to || e.vendor || '').toUpperCase(), reference: e.paid_reference, amount: -Number(e.amount), status: 'new' }));
+    T.bank_lines.push({ id: nid('bl'), account_id: A('bank'), txn_date: addDays(today, -3), description: 'NEFT RENT INORBIT MALL NOV', reference: 'RENT-NOV', amount: -45000, status: 'new' });
+    T.bank_lines.push({ id: nid('bl'), account_id: A('bank'), txn_date: addDays(today, -2), description: 'MDR CHARGES INCL GST', reference: '', amount: -236, status: 'new' });
+    T.bank_lines.sort((a, b) => b.txn_date.localeCompare(a.txn_date));
+  }
   // Two accidental repeat bills today at the first outlet, like a retry on slow internet.
   T.orders.filter(o => o.store_id === 's1' && o.created_at.slice(0, 10) >= addDays(today, -1) && T.order_items.filter(i => i.order_id === o.id).length >= 2).slice(-2).forEach(o => {
     const copy = { ...o, id: nid('o'), receipt_no: 'BTJ-' + (rc++), created_at: new Date(Date.parse(o.created_at) + 38000).toISOString() };
@@ -2633,7 +3257,9 @@ function makeDemoClient() {
       const tbl = T[this.t] = T[this.t] || [];
       const match = r => this.f.every(fn => fn(r));
       if (this.op === 'select') {
-        let rows = enrichAll(this.t, tbl).filter(match);
+        let rows;
+        if (this.t === 'journals') { const { J, L } = demoLedger(), by = {}; L.forEach(l => (by[l.journal_id] = by[l.journal_id] || []).push(l)); rows = J.map(j => ({ ...j, journal_lines: by[j.id] || [] })).filter(match); }
+        else rows = enrichAll(this.t, tbl).filter(match);
         if (this.o.length) rows.sort((a, b) => { for (const [c, asc] of this.o) { const x = get(a, c), y = get(b, c); if (x === y) continue; return (x > y ? 1 : -1) * (asc ? 1 : -1); } return 0; });
         if (this.r) rows = rows.slice(this.r[0], this.r[1] + 1);
         if (this.lim != null) rows = rows.slice(0, this.lim);
@@ -2723,7 +3349,7 @@ function makeDemoClient() {
         if (s.role !== 'admin' && mineE(s, e)) throw new Error("You can't pay your own bill. Someone else has to.");
         if (['Bank transfer', 'UPI', 'Cheque'].includes(p.method) && !p.reference) throw new Error('Add the UTR, UPI or cheque number');
         if (Math.round(Number(p.amount)) !== Math.round(e.amount)) throw new Error(`The amount paid must match the approved amount of ₹${Math.round(e.amount)}`);
-        Object.assign(e, { status: 'paid', paid_by: s.name, paid_by_id: s.id, paid_at: new Date().toISOString(), paid_on: p.paid_on, paid_method: p.method, paid_reference: p.reference || null, paid_to: p.paid_to || null, payment_proof_url: p.proof_url || null });
+        Object.assign(e, { status: 'paid', paid_by: s.name, paid_by_id: s.id, paid_at: new Date().toISOString(), paid_on: p.paid_on, paid_method: p.method, paid_reference: p.reference || null, paid_to: p.paid_to || null, payment_proof_url: p.proof_url || null, paid_from_account_id: p.from_account_id || null });
         logE(e, 'paid', 'approved', 'paid', s, null, { method: p.method, reference: p.reference, amount: p.amount }); return { data: e, error: null };
       }
       if (fn === 'admin_override_expense') {
@@ -2765,6 +3391,59 @@ function makeDemoClient() {
         setStores(t, a.p_store_ids || [], a.p_role === 'admin' || a.p_all_stores, a.p_home_store_id);
         Object.assign(t, { role: a.p_role, permissions: a.p_role === 'admin' ? [] : (a.p_permissions || []), approval_limit: a.p_approval_limit });
         audit(ad, 'access_changed', 'staff', t.id, { name: t.name, before, after: { role: t.role, permissions: t.permissions, approval_limit: t.approval_limit, all_stores: t.all_stores, store_ids: idsOf(t) } }); return { data: strip(t), error: null }; }
+      const S = k => (T.accounting_settings.find(x => x.key === k) || {}).value;
+      const lockOk = d => { const L = S('lock_date'); if (L && d <= L) throw new Error(`The books are locked up to ${prettyDate(L)}. Use a later date, or ask an admin to move the lock date.`); };
+      const needBooks = (id, pin) => { const s = check(id, pin); if (!perm(s, 'accounting')) throw new Error("You don't have access to change the books"); return s; };
+      const postedLines = (from, to, stores, acctId) => { const { J, L } = demoLedger(), ok = new Map(J.filter(j => j.status === 'posted' && (!from || j.entry_date >= from) && (!to || j.entry_date <= to)).map(j => [j.id, j]));
+        return { J, rows: L.filter(l => ok.has(l.journal_id) && (!stores || stores.map(String).includes(String(l.store_id))) && (!acctId || l.account_id === acctId)).map(l => ({ l, j: ok.get(l.journal_id) })) }; };
+      const validLines = lines => { const ls = (lines || []).filter(l => +l.debit || +l.credit); if (ls.length < 2) throw new Error('An entry needs at least two lines');
+        if (ls.some(l => !T.accounts.some(a => a.id === l.account_id && a.is_active))) throw new Error('Pick an account on every line');
+        const d = Math.round(sum(ls, l => l.debit) * 100), c = Math.round(sum(ls, l => l.credit) * 100); if (d !== c) throw new Error(`Debits (₹${d / 100}) and credits (₹${c / 100}) must be equal`); return ls; };
+      if (fn === 'account_totals' || fn === 'account_totals_by_store') { const m = {}; postedLines(a.p_from, a.p_to, a.p_store_ids).rows.forEach(({ l }) => { const k = l.account_id + (fn === 'account_totals' ? '' : '|' + l.store_id);
+          const x = m[k] = m[k] || { account_id: l.account_id, store_id: l.store_id, debit: 0, credit: 0 }; x.debit += l.debit; x.credit += l.credit; }); return { data: Object.values(m), error: null }; }
+      if (fn === 'monthly_pnl') { const from = addDays(todayIST().slice(0, 8) + '01', -31 * (a.p_months - 1)).slice(0, 8) + '01', m = {};
+        postedLines(from, null, a.p_store_ids).rows.forEach(({ l, j }) => { const t = T.accounts.find(x => x.id === l.account_id).type, k = j.entry_date.slice(0, 7), x = m[k] = m[k] || { month: k, income: 0, expense: 0 };
+          if (t === 'income') x.income += l.credit - l.debit; if (t === 'expense') x.expense += l.debit - l.credit; }); return { data: Object.values(m).sort((p, q) => p.month.localeCompare(q.month)), error: null }; }
+      if (fn === 'account_ledger') return { data: postedLines(a.p_from, a.p_to, a.p_store_ids, a.p_account).rows.filter(({ l }) => !a.p_only_open || !l.reconciled)
+          .sort((p, q) => p.j.entry_date.localeCompare(q.j.entry_date) || p.j.journal_no - q.j.journal_no).slice(0, 3000)
+          .map(({ l, j }) => ({ line_id: l.id, journal_id: j.id, journal_no: j.journal_no, entry_date: j.entry_date, narration: j.narration, source_type: j.source_type, store_id: l.store_id, debit: l.debit, credit: l.credit, description: l.description, reconciled: l.reconciled })), error: null };
+      if (fn === 'post_manual_journal') { const s = needBooks(a.p_staff_id, a.p_pin), p = a.p_journal; if (!p.narration) throw new Error('Add a short description of the entry'); if (!p.date) throw new Error('Pick a date'); lockOk(p.date);
+        const id = mjAdd(p.date, p.narration, p.reference || null, 'manual', null, validLines(p.lines), s.name); return { data: { id }, error: null }; }
+      if (fn === 'void_manual_journal') { const s = needBooks(a.p_staff_id, a.p_pin), m = T.manual.find(x => x.j.id === a.p_journal_id); if (!m) throw new Error('Entries from sales and bills change automatically. Void the sale or edit the bill instead.');
+        lockOk(m.j.entry_date); if (m.j.source_type === 'bank') { const b = T.bank_lines.find(x => x.id === m.j.source_id); if (b) Object.assign(b, { status: 'new', journal_line_id: null }); m.lines.forEach(l => reconciled.delete(l.id)); }
+        else if (m.lines.some(l => reconciled.has(l.id))) throw new Error('This entry is matched to a bank statement line. Unmatch it in Accounting, Bank first.');
+        Object.assign(m.j, { status: 'void', voided_by: s.name, void_reason: a.p_reason }); return { data: null, error: null }; }
+      if (fn === 'save_account') { needBooks(a.p_staff_id, a.p_pin); const p = a.p_account; if (!p.code || !p.name) throw new Error('Add a code and a name');
+        if (T.accounts.some(x => x.code === p.code && x.id !== a.p_account_id)) throw new Error(`Code ${p.code} is already used`);
+        if (a.p_account_id) { const x = T.accounts.find(y => y.id === a.p_account_id); if (x.system_key && (p.type !== x.type || p.is_active === false)) throw new Error("This account is used for automatic posting, so its type can't change and it can't be archived. You can rename it."); Object.assign(x, p); return { data: x, error: null }; }
+        const x = { id: nid('a'), ...p, system_key: null }; T.accounts.push(x); T.accounts.sort((p1, p2) => p1.code.localeCompare(p2.code)); return { data: x, error: null }; }
+      if (fn === 'set_accounting_setting') { if (a.p_key === 'lock_date') { check(a.p_staff_id, a.p_pin, true); if (a.p_value && a.p_value >= todayIST()) throw new Error('The lock date has to be before today, otherwise the counter could not take orders'); } else needBooks(a.p_staff_id, a.p_pin);
+        if (a.p_key === 'gst_registered' && a.p_value === 'true' && S('gst_registered') !== 'true') T.orders.forEach(o => { if (o.gst_on === undefined) o.gst_on = false; });
+        T.accounting_settings.find(x => x.key === a.p_key).value = a.p_value; return { data: null, error: null }; }
+      if (fn === 'import_bank_lines') { const s = needBooks(a.p_staff_id, a.p_pin); let added = 0, skipped = 0;
+        a.p_lines.forEach(l => { const key = [l.date, (+l.amount).toFixed(2), l.description || '', l.reference || ''].join('|');
+          if (T.bank_lines.some(b => b.account_id === a.p_account_id && b.key === key)) { skipped++; return; }
+          T.bank_lines.push({ id: nid('bl'), account_id: a.p_account_id, txn_date: l.date, description: l.description, reference: l.reference, amount: +l.amount, status: 'new', key, created_by: s.name }); added++; });
+        T.bank_lines.sort((p, q) => q.txn_date.localeCompare(p.txn_date)); return { data: { added, skipped }, error: null }; }
+      if (fn === 'match_bank_line') { needBooks(a.p_staff_id, a.p_pin); const b = T.bank_lines.find(x => x.id === a.p_bank_line_id), l = demoLedger().L.find(x => x.id === a.p_journal_line_id);
+        if (!b || b.status !== 'new') throw new Error('This statement line is already dealt with'); if (!l || l.reconciled) throw new Error('That entry is already matched');
+        if (Math.round((l.debit - l.credit) * 100) !== Math.round(b.amount * 100)) throw new Error("The amounts don't match"); reconciled.add(l.id); Object.assign(b, { status: 'matched', journal_line_id: l.id }); return { data: null, error: null }; }
+      if (fn === 'post_bank_line') { const s = needBooks(a.p_staff_id, a.p_pin), b = T.bank_lines.find(x => x.id === a.p_bank_line_id); if (!b || b.status !== 'new') throw new Error('This statement line is already dealt with'); lockOk(b.txn_date);
+        const id = mjAdd(b.txn_date, a.p_narration || b.description || 'Bank entry', b.reference, 'bank', b.id, [{ account_id: b.account_id, store_id: a.p_store_id, debit: Math.max(b.amount, 0), credit: Math.max(-b.amount, 0), description: b.description },
+          { account_id: a.p_account_id, store_id: a.p_store_id, debit: Math.max(-b.amount, 0), credit: Math.max(b.amount, 0), description: b.description }], s.name);
+        reconciled.add(id + '-0'); Object.assign(b, { status: 'posted', journal_line_id: id + '-0' }); return { data: null, error: null }; }
+      if (fn === 'reset_bank_line') { needBooks(a.p_staff_id, a.p_pin); const b = T.bank_lines.find(x => x.id === a.p_bank_line_id);
+        if (a.p_ignore) { b.status = 'ignored'; return { data: null, error: null }; }
+        if (b.status === 'posted') { const m = T.manual.find(x => x.j.source_id === b.id && x.j.status === 'posted'); if (m) { lockOk(m.j.entry_date); m.lines.forEach(l => reconciled.delete(l.id)); m.j.status = 'void'; } }
+        if (b.status === 'matched') reconciled.delete(b.journal_line_id); Object.assign(b, { status: 'new', journal_line_id: null }); return { data: null, error: null }; }
+      if (fn === 'admin_edit_expense') { const s = check(a.p_admin_id, a.p_admin_pin, true), e = bill(a.p_expense_id), p = a.p_bill; if (!a.p_reason) throw new Error("Add a reason for the change. It is saved in the bill's history.");
+        if (e.status === 'paid' && Math.round(+p.amount * 100) !== Math.round(e.amount * 100)) throw new Error("This bill is already paid, so its amount can't change. Change its status back to Approved first (that undoes the payment), then edit it.");
+        const old = { ...e }; lockOk(old.bill_date || todayIST()); if (p.bill_date) lockOk(p.bill_date);
+        Object.assign(e, { store_id: p.store_id || e.store_id, category: p.category || e.category, amount: +p.amount, gst_amount: +p.gst_amount || 0, bill_date: p.bill_date || e.bill_date, vendor: p.vendor || null, invoice_no: p.invoice_no || null,
+          payment_mode: p.payment_mode || e.payment_mode, account_id: p.account_id || null, notes: p.notes || null, receipt_url: p.receipt_url || e.receipt_url });
+        logE(e, 'admin_edit', old.status, e.status, s, a.p_reason, { old_amount: old.amount, new_amount: e.amount }); audit(s, 'bill_edited', 'expense', e.id, { reason: a.p_reason }); return { data: e, error: null }; }
+      if (fn === 'recode_expense') { const s = needBooks(a.p_staff_id, a.p_pin), e = bill(a.p_expense_id); if (+a.p_gst_amount < 0 || +a.p_gst_amount > e.amount) throw new Error('GST must be between 0 and the bill amount');
+        e.account_id = a.p_account_id || null; e.gst_amount = +a.p_gst_amount || 0; logE(e, 'recoded', e.status, e.status, s, a.p_note); return { data: e, error: null }; }
       if (fn === 'void_order') {
         const s = check(a.p_admin_id, a.p_admin_pin), o = T.orders.find(x => sameId(x.id, a.p_order_id));
         if (!perm(s, 'void_bills')) throw new Error("You don't have access to void bills");
@@ -2814,7 +3493,7 @@ function makeDemoClient() {
 function startDemo() {
   db = makeDemoClient(); state.demo = true; state.storeId = null;
   $('demo-pill').classList.remove('hidden');
-  $('demo-box').innerHTML = '<p class="small" style="color:var(--leaf);font-weight:700">Sample data loaded. Tap any name and enter PIN 1234. Try Sai Kumar (admin, see Users &amp; access), Priya Reddy (works at two outlets), Ananya Rao (finance), Manoj Kumar (store manager) or Ravi Teja (barista). Neha Varma is locked out and Imran Khan has a temporary PIN.</p>';
+  $('demo-box').innerHTML = '<p class="small" style="color:var(--leaf);font-weight:700">Sample data loaded. Tap any name and enter PIN 1234. Try Sai Kumar (admin), Kavya Iyer (accountant, see Accounting), Priya Reddy (works at two outlets), Ananya Rao (finance), Manoj Kumar (store manager) or Ravi Teja (barista). Neha Varma is locked out and Imran Khan has a temporary PIN.</p>';
   loadLoginStaff();
 }
 </script>
