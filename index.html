@@ -1054,7 +1054,7 @@ async function placeOrder() {
   }
   if (data.repeat) toast('This order was already saved. Showing that bill.', 'ok');
   state.lastOrder = { ...data, phone, lines: state.cart.map(l => ({ ...l })) };
-  state.cart = []; state.discount = 0; state.checkoutRef = null;
+  state.cart = []; state.discount = 0; state.checkoutRef = null; state.payMode = 'UPI';
   $('cust-phone').value = ''; $('cust-name').value = ''; $('cust-hint').className = 'hidden'; lastLookup = '';
   renderTicket(); renderMenu(); closeTicket();
   confetti({ particleCount: 110, spread: 75, origin: { y: .6 }, colors: ['#EE3F7F', '#FCB449', '#A6CE43', '#F68941'] });
@@ -2181,7 +2181,7 @@ const acctName = id => { const a = acct(id); return a ? `${a.code} ${a.name}` : 
 const ledgerStores = () => isAll() ? ((isAdmin() || state.me?.all_stores) ? null : storeFilterIds()) : [String(state.storeId)];
 const natural = a => ['asset', 'expense'].includes(a.type);
 const bal = (a, t) => !t ? 0 : (natural(a) ? 1 : -1) * (Number(t.debit) - Number(t.credit));
-async function totals(from, to, stores = ledgerStores()) {
+async function bookTotals(from, to, stores = ledgerStores()) {
   const { data, error } = await db.rpc('account_totals', { p_from: from, p_to: to, p_store_ids: stores });
   if (fail(error, 'Loading the books')) return {};
   return Object.fromEntries((data || []).map(r => [String(r.account_id), r]));
@@ -2222,7 +2222,7 @@ const booksStale = tab => state.view !== 'books' || state.books.tab !== tab;
 /* ---------- overview ---------- */
 async function booksOverview() {
   const t = todayIST(), m0 = t.slice(0, 8) + '01';
-  const [all, biz, month, pm, bl, ub] = await Promise.all([totals(null, t), totals(null, t, null), totals(m0, t), db.rpc('monthly_pnl', { p_months: 6, p_store_ids: ledgerStores() }),
+  const [all, biz, month, pm, bl, ub] = await Promise.all([bookTotals(null, t), bookTotals(null, t, null), bookTotals(m0, t), db.rpc('monthly_pnl', { p_months: 6, p_store_ids: ledgerStores() }),
     db.from('bank_lines').select('id, amount').eq('status', 'new'), db.from('expenses').select('id, amount').eq('status', 'approved').in('store_id', storeFilterIds())]);
   if (booksStale('overview')) return;
   const A = state.cache.accounts, k = key => { const a = acctByKey(key); return a ? bal(a, all[String(a.id)]) : 0; }, kb = key => { const a = acctByKey(key); return a ? bal(a, biz[String(a.id)]) : 0; };
@@ -2371,7 +2371,7 @@ async function booksBank() {
   const [{ data: lines }, { data: open }, all] = await Promise.all([
     db.from('bank_lines').select('*').eq('account_id', A.id).order('txn_date', { ascending: false }).limit(800),
     db.rpc('account_ledger', { p_account: A.id, p_from: addDays(todayIST(), -240), p_to: null, p_store_ids: null, p_only_open: true }),
-    totals(null, null, null)]);
+    bookTotals(null, null, null)]);
   if (booksStale('bank')) return;
   state.cache.bankLines = lines || []; state.cache.openLedger = open || [];
   const L = state.cache.bankLines, todo = L.filter(l => l.status === 'new'), done = L.filter(l => ['matched', 'posted'].includes(l.status)), ign = L.filter(l => l.status === 'ignored');
@@ -2480,7 +2480,7 @@ async function doImport() {
 
 /* ---------- chart of accounts ---------- */
 async function booksCOA() {
-  const all = await totals(null, null, null);
+  const all = await bookTotals(null, null, null);
   if (booksStale('coa')) return;
   const A = state.cache.accounts.filter(a => state.books.coaArchived || a.is_active);
   const sub = (t, s) => (SUBTYPES[t] || []).find(x => x[0] === s)?.[1] || s;
@@ -2545,7 +2545,7 @@ async function rPnL() {
     cols = [...stores.map(s => storeById(s)?.name || 'No outlet'), 'Total'];
     val = (a, i) => { const rows = (data || []).filter(x => sameId(x.account_id, a.id) && (i === stores.length || String(x.store_id) === stores[i])); return sum(rows, x => bal(a, x)); };
   } else {
-    const t = await totals(r.s, r.e); if (rStale('pnl')) return;
+    const t = await bookTotals(r.s, r.e); if (rStale('pnl')) return;
     cols = ['Amount', '% of income']; val = (a, i) => i === 0 ? bal(a, t[String(a.id)]) : null;
   }
   const n = cols.length - (split ? 0 : 1), idx = [...Array(n).keys()];
@@ -2564,7 +2564,7 @@ async function rPnL() {
   state.cache.report = rows.filter(x => !x.head).map(x => Object.fromEntries([['Account', x.label], ...cols.map((c, i) => [c, typeof x.vals[i] === 'number' ? Math.round(x.vals[i] * 100) / 100 : x.vals[i]])]));
 }
 async function rBS() {
-  const r = range('books'), A = state.cache.accounts, t = await totals(null, r.e, null); if (rStale('bs')) return;
+  const r = range('books'), A = state.cache.accounts, t = await bookTotals(null, r.e, null); if (rStale('bs')) return;
   const v = a => bal(a, t[String(a.id)]), nz = l => l.filter(a => Math.abs(v(a)) >= .005);
   const as = A.filter(a => a.type === 'asset'), li = A.filter(a => a.type === 'liability'), eq = A.filter(a => a.type === 'equity');
   const profit = sum(A.filter(a => a.type === 'income'), v) - sum(A.filter(a => a.type === 'expense'), v);
@@ -2580,7 +2580,7 @@ async function rBS() {
   state.cache.report = rows.filter(x => !x.head).map(x => ({ Account: x.label, Amount: Math.round(x.vals[0] * 100) / 100 }));
 }
 async function rTB() {
-  const r = range('books'), A = state.cache.accounts, t = await totals(null, r.e, null); if (rStale('tb')) return;
+  const r = range('books'), A = state.cache.accounts, t = await bookTotals(null, r.e, null); if (rStale('tb')) return;
   const rows = A.map(a => { const x = t[String(a.id)]; const net = x ? Number(x.debit) - Number(x.credit) : 0; return { a, dr: net > 0 ? net : 0, cr: net < 0 ? -net : 0 }; }).filter(x => x.dr || x.cr);
   const D = sum(rows, x => x.dr), C = sum(rows, x => x.cr);
   $('rp-body').innerHTML = `<div class="panel"><div class="row"><h3>Trial balance</h3><span class="spacer"></span>${Math.round(D * 100) === Math.round(C * 100) ? '<span class="pill ok">Debits equal credits</span>' : '<span class="pill out">Not equal</span>'}</div>
@@ -2593,7 +2593,7 @@ async function rTB() {
 async function rGL() {
   const r = range('books'); if (!acct(state.books.gl)) state.books.gl = String(acctByKey('bank')?.id || state.cache.accounts[0]?.id);
   const a = acct(state.books.gl);
-  const [open, { data, error }] = await Promise.all([totals(null, addDays(r.s, -1)), db.rpc('account_ledger', { p_account: a.id, p_from: r.s, p_to: r.e, p_store_ids: ledgerStores(), p_only_open: false })]);
+  const [open, { data, error }] = await Promise.all([bookTotals(null, addDays(r.s, -1)), db.rpc('account_ledger', { p_account: a.id, p_from: r.s, p_to: r.e, p_store_ids: ledgerStores(), p_only_open: false })]);
   if (fail(error, 'Loading transactions') || rStale('gl')) return;
   let run = bal(a, open[String(a.id)]); const start = run, sign = natural(a) ? 1 : -1;
   const rows = (data || []).map(x => { run += sign * (Number(x.debit) - Number(x.credit)); return { ...x, run }; });
@@ -2608,7 +2608,7 @@ async function rGL() {
   state.cache.report = rows.map(x => ({ Date: x.entry_date, Journal: 'J-' + x.journal_no, Description: x.narration, Outlet: storeById(x.store_id)?.name || '', Debit: Number(x.debit), Credit: Number(x.credit), Balance: Math.round(x.run * 100) / 100 }));
 }
 async function rGST() {
-  const r = range('books'), S = state.cache.acctSettings, t = await totals(r.s, r.e); if (rStale('gst')) return;
+  const r = range('books'), S = state.cache.acctSettings, t = await bookTotals(r.s, r.e); if (rStale('gst')) return;
   const o = acctByKey('gst_output'), i = acctByKey('gst_input'), out = bal(o, t[String(o.id)]), inp = bal(i, t[String(i.id)]);
   $('rp-body').innerHTML = `<div class="panel"><h3>GST summary</h3><p class="sub">${esc(scopeLabel())}, ${prettyDate(r.s)} to ${prettyDate(r.e)}. ${S.gst_registered === 'true' ? `Sale prices include GST at ${esc(S.sales_gst_rate)}%.${S.gstin ? ` GSTIN ${esc(S.gstin)}.` : ''}` : 'GST is switched off in Settings, so sales carry no GST.'}</p>
     ${rTable(['Amount'], [{ label: 'GST collected on sales (output tax)', vals: [out] }, { label: 'GST paid on bills (input credit)', vals: [inp] }, { label: out - inp >= 0 ? 'GST to pay' : 'GST credit to carry forward', total: 1, big: 1, vals: [Math.abs(out - inp)] }])}
