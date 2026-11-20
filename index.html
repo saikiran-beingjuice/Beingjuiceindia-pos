@@ -718,7 +718,7 @@ async function enterApp() {
   checkSchema();
 }
 // The app needs database version 7. If Supabase is behind, tell admins exactly what to do.
-const NEEDED_SCHEMA = 7;
+const NEEDED_SCHEMA = 8;
 async function checkSchema() {
   if (state.demo) return;
   const { data, error } = await db.rpc('btj_schema_version');
@@ -756,7 +756,7 @@ const NAV = [
     ['menu','🍍','Menu', () => can('menu')],
     ['boosters','🫐','Boosters', () => can('menu')],
     ['recipes','🧪','Recipes', () => can('menu')],
-    ['inventory','📦','Stock', () => can('stock')],
+    ['inventory','📦','Stock', () => can('stock') || can('pos') || can('expense_submit')],
     ['stores','🎪','Outlets & events', () => can('outlets')],
     ['staff','🧑‍🍳','Users & access', () => isAdmin()],
     ['settings','⚙️','Payment settings', () => can('settings')] ] }
@@ -802,10 +802,12 @@ async function loadStores() {
 // Outlets and events grouped. The top-bar switcher hides finished or cancelled events.
 function storeOptions(selected, { allOption = '', switcher = false, scoped = false } = {}) {
   const keep = s => (!switcher || sameId(s.id, selected) || !isEvent(s) || ['live', 'upcoming'].includes(eventState(s)[0])) && (!(switcher || scoped) || inScope(s.id));
-  const outlets = state.stores.filter(s => !isEvent(s) && keep(s));
+  const kitchens = state.stores.filter(s => s.kind === 'kitchen' && keep(s));
+  const outlets = state.stores.filter(s => !isEvent(s) && s.kind !== 'kitchen' && keep(s));
   const events = state.stores.filter(s => isEvent(s) && keep(s)).sort((a, b) => (a.event_start || '').localeCompare(b.event_start || ''));
   const opt = s => `<option value="${esc(s.id)}" ${sameId(s.id, selected) ? 'selected' : ''}>${esc(s.name)}${isEvent(s) ? ` (${eventState(s)[1]})` : ''}</option>`;
   return (allOption ? `<option value="">${esc(allOption)}</option>` : '') +
+    (kitchens.length ? `<optgroup label="Kitchens">${kitchens.map(opt).join('')}</optgroup>` : '') +
     (outlets.length ? `<optgroup label="Outlets">${outlets.map(opt).join('')}</optgroup>` : '') +
     (events.length ? `<optgroup label="Events">${events.map(opt).join('')}</optgroup>` : '');
 }
@@ -814,7 +816,7 @@ function renderStoreSelect() {
   sel.innerHTML = (many ? `<option value="${ALL}" ${isAll() ? 'selected' : ''}>${isAdmin() || state.me?.all_stores ? 'All outlets & events' : 'All my outlets'}</option>` : '') +
     (storeOptions(state.storeId, { switcher: true }) || '<option>No outlets yet</option>');
   sel.disabled = sel.options.length <= 1;
-  $('store-emoji').textContent = isAll() ? '🌐' : isEvent(currentStore()) ? '🎪' : '📍';
+  $('store-emoji').textContent = isAll() ? '🌐' : storeEmoji(currentStore());
 }
 // Inside an event, reports default to "Whole event"; back at an outlet they return to normal.
 function applyStorePresets() {
@@ -1440,6 +1442,7 @@ async function billModal(id) {
     else { const over = overMyLimit(e);
       actions += `<div class="fb-card"><h4>Your decision</h4>
         ${over ? `<p class="small" style="color:var(--red);margin-bottom:8px">This is above your approval limit of ${inr(state.me.approval_limit)}. You can send it back or reject it; an admin or someone with a higher limit has to approve it.</p>` : ''}
+        ${String(e.notes || '').startsWith('Stock:') ? '<p class="small" style="margin-bottom:8px;color:#9A5B00">This is a stock purchase. Rejecting it also takes these items back out of stock.</p>' : ''}
         <input class="input" id="dec-note" placeholder="Note (needed to send back or reject)">
         <div class="row" style="margin-top:10px"><button class="btn danger" onclick="decideBill('${esc(e.id)}','reject')">Reject</button>
           <button class="btn ghost" onclick="decideBill('${esc(e.id)}','send_back')">Send back to fix</button><span class="spacer"></span>
@@ -1916,92 +1919,415 @@ async function deleteBooster(i) {
 /* =========================================================
    SETUP: RECIPES
    ========================================================= */
-RENDER.recipes = function () {
-  $('v-recipes').innerHTML = `<div class="grid g3" style="align-items:start">
-    <div class="panel"><h3>Drinks</h3><p class="sub">Pick a drink to set what goes into one cup.</p><div id="rec-list" style="display:flex;flex-direction:column;gap:6px"></div></div>
-    <div class="panel span2" id="rec-edit">${emptyState('Pick a drink', 'Its ingredients will show here. Stock is taken off automatically for every cup sold.')}</div></div>`;
-  $('rec-list').innerHTML = state.drinks.map((d, i) => `<button class="btn ghost" style="justify-content:space-between" onclick="editRecipe(${i})">${esc(d.name)}
-      ${(d.recipe_items || []).length ? `<span class="pill ok">${d.recipe_items.length} items</span>` : '<span class="pill low">Not set</span>'}</button>`).join('') || emptyState('No drinks yet', 'Add drinks in Menu first.');
-  if (state.recIdx != null && state.drinks[state.recIdx]) editRecipe(state.recIdx);
-};
-function recRow(invId = '', qty = '') {
-  return `<div class="row rec-row" style="margin-bottom:8px;flex-wrap:nowrap"><select class="input rec-inv" style="flex:2">${invOptions(invId).replace('Not linked to stock', 'Choose an ingredient')}</select>
-    <input class="input rec-qty" type="number" style="flex:1" placeholder="Amount" value="${esc(qty)}"><button class="btn danger sm" onclick="this.parentNode.remove()" aria-label="Remove">✕</button></div>`;
-}
-function editRecipe(i) {
-  state.recIdx = i; const d = state.drinks[i];
-  if (!state.inventory.length) { $('rec-edit').innerHTML = emptyState('No stock items yet', 'Add ingredients in Stock first, then come back.'); return; }
-  $('rec-edit').innerHTML = `<h3>${esc(d.name)}</h3><p class="sub">Ingredients for one cup. Amounts use each item's unit (grams, ml, or pieces).</p>
-    <div id="rec-rows">${(d.recipe_items || []).length ? d.recipe_items.map(r => recRow(r.inventory_id, r.qty_required)).join('') : recRow()}</div>
-    <div class="row" style="margin-top:12px"><button class="btn ghost" onclick="$('rec-rows').insertAdjacentHTML('beforeend', recRow())">+ Add ingredient</button><span class="spacer"></span><button class="btn berry" onclick="saveRecipe()">Save recipe</button></div>`;
-}
-async function saveRecipe() {
-  const d = state.drinks[state.recIdx];
-  const rows = [...document.querySelectorAll('.rec-row')].map(r => ({ inventory_id: r.querySelector('.rec-inv').value, qty_required: parseFloat(r.querySelector('.rec-qty').value) }))
-    .filter(r => r.inventory_id && r.qty_required > 0).map(r => ({ ...r, drink_id: d.id }));
-  const del = await db.from('recipe_items').delete().eq('drink_id', d.id);
-  if (fail(del.error, 'Saving recipe')) return;
-  if (rows.length) { const { error } = await db.from('recipe_items').insert(rows); if (fail(error, 'Saving recipe')) return; }
-  toast(`Recipe for ${d.name} saved`, 'ok'); await refreshStore(); RENDER.recipes();
-}
-
 /* =========================================================
-   SETUP: STOCK
+   STOCK: ingredients and packs, central kitchen, purchases,
+   pack making, transfers, counts, wastage, history.
+   Every change goes through PIN-checked database functions.
    ========================================================= */
-const reorderOf = v => Number(v.reorder_level ?? 1000);
-const stockStatus = v => Number(v.stock_qty) <= 0 ? ['out', 'Out of stock', 'var(--red)'] : Number(v.stock_qty) < reorderOf(v) ? ['low', 'Running low', 'var(--mango)'] : ['ok', 'Good', 'var(--leaf)'];
-RENDER.inventory = function () {
+state.inv = { tab: 'levels', kind: 'all', q: '', moveReason: 'all' };
+state.periods.inv = { preset: '7d' };
+const ITEM_CATS = ['Fruit', 'Dairy & ice', 'Sweeteners & syrups', 'Boosters', 'Packaging', 'Packs', 'Other'];
+const UNIT_FACTOR = { g: 1, kg: 1000, ml: 1, L: 1000, pcs: 1 };
+const unitChoices = u => u === 'g' ? ['g', 'kg'] : u === 'ml' ? ['ml', 'L'] : ['pcs'];
+const isKitchen = s => s?.kind === 'kitchen';
+const storeEmoji = s => isKitchen(s) ? '🏭' : isEvent(s) ? '🎪' : '📍';
+const fmtQty = (q, u) => { q = Number(q) || 0; const big = (u === 'g' || u === 'ml') && Math.abs(q) >= 1000; const v = big ? q / 1000 : q;
+  return `${(Math.round(v * 1000) / 1000).toLocaleString('en-IN')} ${big ? (u === 'g' ? 'kg' : 'L') : u}`; };
+const invRpc = (fn, args) => db.rpc(fn, { p_staff_id: String(state.me.id), p_pin: state.pin, ...args });
+const itemOf = k => (state.cache.items || []).find(i => i.key === k);
+const defaultKitchen = () => { const k = state.stores.find(s => isKitchen(s) && inScope(s.id)); return k ? String(k.id) : (!isAll() ? String(state.storeId) : String(scopeStores()[0]?.id || '')); };
+const stockStatus2 = (qty, reorder) => qty < 0 ? ['neg', 'Below zero', 'out'] : qty === 0 ? ['out', 'Out of stock', 'out'] : reorder > 0 && qty < reorder ? ['low', 'Running low', 'low'] : ['ok', 'Good', 'ok'];
+
+async function loadStock() {
+  const ids = scopeStores().map(s => String(s.id));
+  const [it, inv, pr, pri] = await Promise.all([
+    db.from('stock_items').select('*').order('name'),
+    fetchAll(() => db.from('inventory').select('*').in('store_id', ids), 'Loading stock'),
+    db.from('pack_recipes').select('*'), db.from('pack_recipe_items').select('*')]);
+  if (it.error) { toast('Stock: ' + it.error.message, 'err'); return false; }
+  state.cache.items = it.data || []; state.cache.inv = inv || [];
+  state.cache.packRecipes = Object.fromEntries((pr.data || []).map(r => [r.pack_key, { ...r, lines: (pri.data || []).filter(x => x.pack_key === r.pack_key) }]));
+  return true;
+}
+const invRow = (store, key) => (state.cache.inv || []).find(r => sameId(r.store_id, store) && r.item_key === key);
+const haveAt = (store, key) => Number(invRow(store, key)?.stock_qty || 0);
+const recipeText = lines => (lines || []).map(l => `${fmtQty(l.qty, itemOf(l.item_key)?.unit)} ${itemOf(l.item_key)?.name || l.item_key}`).join(' + ');
+
+RENDER.inventory = async function () {
+  const el = $('v-inventory'); if (!el.innerHTML || el.innerHTML.includes('Pick an outlet')) el.innerHTML = LOADING;
+  if (!(await loadStock()) || state.view !== 'inventory') return;
+  const tabs = [['levels', 'Stock levels', true], ['buy', 'Buy stock', can('expense_submit') || can('stock')], ['make', 'Make packs', can('stock')],
+    ['transfers', 'Send & receive', can('stock') || can('pos')], ['count', can('stock') ? 'Count & waste' : 'Wastage', can('stock') || can('pos')],
+    ['items', 'Items & pack recipes', can('stock') || can('menu')], ['history', 'History', can('stock') || can('reports')]].filter(t => t[2]);
+  if (!tabs.some(t => t[0] === state.inv.tab)) state.inv.tab = 'levels';
+  const { data: incoming } = await db.from('stock_transfers').select('id').eq('status', 'in_transit').in('to_store', storeFilterIds());
+  el.innerHTML = `<div class="period"><div class="seg" style="flex:0 1 auto">${tabs.map(([k, l]) => `<button class="${state.inv.tab === k ? 'on' : ''}" onclick="state.inv.tab='${k}';RENDER.inventory()">${l}${k === 'transfers' && (incoming || []).length ? ` <span class="pill low">${incoming.length}</span>` : ''}</button>`).join('')}</div>
+    <span class="spacer"></span><span class="pill">${isAll() ? '🌐 ' + esc(scopeLabel()) : storeEmoji(currentStore()) + ' ' + esc(currentStore()?.name || '')}</span></div>
+    ${!state.stores.some(isKitchen) && isAdmin() ? `<div class="cust-hint" style="margin-bottom:12px">No central kitchen set up yet. Add one in Outlets &amp; events so packs can be made there and sent to outlets.</div>` : ''}
+    <div id="inv-body">${LOADING}</div>`;
+  ({ levels: invLevels, buy: invBuy, make: invMake, transfers: invTransfers, count: invCount, items: invItems, history: invHistory })[state.inv.tab]();
+};
+const invStale = t => state.view !== 'inventory' || state.inv.tab !== t;
+
+/* ---------- reusable item lines (item, quantity with kg/L, optional cost or reason) ---------- */
+function itemSelect(sel, filter = () => true) {
+  const items = (state.cache.items || []).filter(i => i.is_active && filter(i));
+  const groups = [...new Set(items.map(i => i.kind === 'pack' ? 'Packs' : i.category))];
+  return `<option value="">Pick an item</option>` + groups.map(g => `<optgroup label="${esc(g)}">${items.filter(i => (i.kind === 'pack' ? 'Packs' : i.category) === g).map(i => `<option value="${esc(i.key)}" ${i.key === sel ? 'selected' : ''}>${esc(i.name)}</option>`).join('')}</optgroup>`).join('');
+}
+function lineRow(o, l = {}) {
+  const it = itemOf(l.item_key), u = it?.unit || 'g', big = l.qty && (u === 'g' || u === 'ml') && l.qty >= 1000 && o.bigUnits !== false;
+  return `<tr class="ln"><td style="min-width:190px"><select class="input ln-item" onchange="lnItem(this)">${itemSelect(l.item_key, o.filter || (() => true))}</select>${o.haveStore ? `<div class="small muted ln-have"></div>` : ''}</td>
+    <td style="width:110px"><input class="input ln-qty" type="number" step="0.001" min="0" value="${l.qty ? (big ? l.qty / 1000 : l.qty) : ''}" oninput="${o.onchange || ''}"></td>
+    <td style="width:86px"><select class="input ln-unit" onchange="${o.onchange || ''}">${unitChoices(u).map(x => `<option ${x === (big ? unitChoices(u)[1] : u) ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
+    ${o.cost ? `<td style="width:120px"><input class="input ln-cost" type="number" step="0.01" min="0" placeholder="₹ paid" value="${l.cost ?? ''}" oninput="${o.onchange || ''}"></td>` : ''}
+    ${o.reason ? `<td><input class="input ln-reason" placeholder="Spoilt, dropped, expired" value="${esc(l.reason || '')}"></td>` : ''}
+    ${o.extra ? `<td class="small muted ln-extra">${o.extra(l)}</td>` : ''}
+    <td><button class="btn danger sm" onclick="this.closest('tr').remove();${o.onchange || ''}" aria-label="Remove">✕</button></td></tr>`;
+}
+function lnItem(sel) {
+  const tr = sel.closest('tr'), it = itemOf(sel.value), u = it?.unit || 'g';
+  tr.querySelector('.ln-unit').innerHTML = unitChoices(u).map(x => `<option>${x}</option>`).join('');
+  const h = tr.querySelector('.ln-have'), store = tr.closest('[data-store-src]') && $(tr.closest('[data-store-src]').dataset.storeSrc)?.value;
+  if (h) h.textContent = it && store ? `In stock: ${fmtQty(haveAt(store, it.key), u)}` : '';
+  const onch = tr.querySelector('.ln-qty').getAttribute('oninput'); if (onch) eval(onch);
+}
+function refreshHaves(tbodyId) { document.querySelectorAll(`#${tbodyId} .ln-item`).forEach(s => { const tr = s.closest('tr'), h = tr.querySelector('.ln-have'), store = $(tr.closest('[data-store-src]')?.dataset.storeSrc)?.value; if (h && s.value) h.textContent = `In stock: ${fmtQty(haveAt(store, s.value), itemOf(s.value)?.unit)}`; }); }
+function readLines(tbodyId, o = {}) {
+  const out = [];
+  for (const tr of document.querySelectorAll(`#${tbodyId} .ln`)) {
+    const key = tr.querySelector('.ln-item').value, q = parseFloat(tr.querySelector('.ln-qty').value);
+    if (!key && !q) continue;
+    if (!key) throw new Error('Pick an item on every line');
+    if (!(q > 0)) throw new Error(`Enter a quantity for ${itemOf(key).name}`);
+    const l = { item_key: key, qty: Math.round(q * UNIT_FACTOR[tr.querySelector('.ln-unit').value] * 1000) / 1000 };
+    if (o.cost) { const c = parseFloat(tr.querySelector('.ln-cost').value); if (!(c >= 0)) throw new Error(`Enter what you paid for ${itemOf(key).name}`); l.cost = c; }
+    if (o.reason) l.reason = tr.querySelector('.ln-reason').value.trim();
+    out.push(l);
+  }
+  if (!out.length) throw new Error('Add at least one item');
+  return out;
+}
+const lineHead = o => `<thead><tr><th>Item</th><th>Quantity</th><th></th>${o.cost ? '<th>Total paid</th>' : ''}${o.reason ? '<th>Why</th>' : ''}${o.extraHead ? `<th>${o.extraHead}</th>` : ''}<th></th></tr></thead>`;
+const scopedStoreSelect = (id, sel, filter = () => true) => `<select class="input" id="${id}">${scopeStores().filter(filter).map(s => `<option value="${esc(s.id)}" ${sameId(s.id, sel) ? 'selected' : ''}>${storeEmoji(s)} ${esc(s.name)}</option>`).join('')}</select>`;
+
+/* ---------- stock levels ---------- */
+function invLevels() {
+  const items = (state.cache.items || []).filter(i => (state.inv.kind === 'all' || i.kind === state.inv.kind) && (!state.inv.q || i.name.toLowerCase().includes(state.inv.q.toLowerCase())));
+  const tools = `<div class="row" style="margin-bottom:12px"><div class="chips">${[['all', 'Everything'], ['ingredient', 'Ingredients'], ['pack', 'Packs']].map(([k, l]) => `<button class="chip ${state.inv.kind === k ? 'on' : ''}" onclick="state.inv.kind='${k}';invLevels()">${l}</button>`).join('')}</div>
+    <input class="input" style="max-width:220px" placeholder="Search items" value="${esc(state.inv.q)}" oninput="state.inv.q=this.value;clearTimeout(window._iq);window._iq=setTimeout(invLevels,250)"></div>`;
   if (isAll()) {
-    const items = [...state.inventory].sort((a, b) => Number(a.stock_qty) / reorderOf(a) - Number(b.stock_qty) / reorderOf(b));
-    const low = items.filter(v => stockStatus(v)[0] !== 'ok');
-    $('v-inventory').innerHTML = `<div class="period"><span class="pill ${low.length ? 'low' : 'ok'}">${low.length ? `${low.length} item${low.length > 1 ? 's' : ''} to reorder across outlets` : 'All stock looks good everywhere'}</span>
-      <span class="muted small">Pick an outlet to restock or edit items.</span></div>
-      <div class="panel">${items.length ? `<div class="table-wrap"><table><thead><tr><th>Item</th><th>Outlet</th><th>In stock</th><th>Status</th><th></th></tr></thead><tbody>
-      ${items.map(v => { const [k, l, c] = stockStatus(v); return `<tr><td><b>${esc(v.name)}</b></td><td class="small">${esc(storeById(v.store_id)?.name || '')}</td>
-        <td><div class="row" style="flex-wrap:nowrap"><div class="stock-bar"><div style="width:${Math.min(100, Math.max(2, Number(v.stock_qty) / (reorderOf(v) * 3) * 100))}%;background:${c}"></div></div><b>${Number(v.stock_qty).toLocaleString('en-IN')}</b> <span class="muted">${esc(v.unit)}</span></div></td>
-        <td><span class="pill ${k}">${l}</span></td><td><button class="btn ghost sm" onclick="useStore('${esc(v.store_id)}')">Open outlet</button></td></tr>`; }).join('')}</tbody></table></div>` : emptyState('No stock items yet', '')}</div>`;
+    const stores = scopeStores().filter(s => (state.cache.inv || []).some(r => sameId(r.store_id, s.id))).sort((a, b) => (isKitchen(b) - isKitchen(a)) || a.name.localeCompare(b.name));
+    const value = sum(state.cache.inv, r => Math.max(0, r.stock_qty) * (r.avg_cost || 0));
+    $('inv-body').innerHTML = `<div class="grid g3" style="margin-bottom:16px">${kpi('Stock value, everywhere', inr(value), '<span class="delta flat">At average cost</span>', 'var(--berry)')}
+      ${kpi('Running low somewhere', (state.cache.inv || []).filter(r => { const it = itemOf(r.item_key); return it && it.reorder_level > 0 && r.stock_qty < it.reorder_level; }).length, '<span class="delta flat">Item and outlet pairs</span>', 'var(--mango)')}
+      ${kpi('Below zero', (state.cache.inv || []).filter(r => r.stock_qty < 0).length, '<span class="delta flat">A purchase, delivery or count is missing</span>', 'var(--red)')}</div>
+      <div class="panel">${tools}<div class="table-wrap"><table><thead><tr><th>Item</th>${stores.map(s => `<th style="text-align:right">${storeEmoji(s)} ${esc(s.name)}</th>`).join('')}<th style="text-align:right">Total</th></tr></thead><tbody>
+      ${items.map(it => `<tr><td><b>${esc(it.name)}</b> ${it.kind === 'pack' ? '<span class="pill berry">Pack</span>' : ''}<div class="small muted">${esc(it.category)}</div></td>
+        ${stores.map(s => { const r = invRow(s.id, it.key); if (!r) return '<td style="text-align:right" class="muted">—</td>'; const st = stockStatus2(Number(r.stock_qty), it.reorder_level);
+          return `<td style="text-align:right"><span style="${st[0] === 'ok' ? '' : `color:${st[0] === 'low' ? '#9A5B00' : 'var(--red)'};font-weight:700`}">${fmtQty(r.stock_qty, it.unit)}</span></td>`; }).join('')}
+        <td style="text-align:right" class="money">${fmtQty(sum((state.cache.inv || []).filter(r => r.item_key === it.key), r => r.stock_qty), it.unit)}</td></tr>`).join('')}
+      </tbody></table></div></div>`;
     return;
   }
-  const low = state.inventory.filter(v => stockStatus(v)[0] !== 'ok');
-  $('v-inventory').innerHTML = `<div class="period"><span class="pill ${low.length ? 'low' : 'ok'}">${low.length ? `${low.length} item${low.length > 1 ? 's' : ''} to reorder` : 'All stock looks good'}</span><span class="spacer"></span>
-      <button class="btn berry" onclick="invModal()">+ Add stock item</button></div>
-    <div class="panel">${state.inventory.length ? `<div class="table-wrap"><table><thead><tr><th>Item</th><th>In stock</th><th>Reorder below</th><th>Status</th><th></th></tr></thead><tbody>
-      ${[...state.inventory].sort((a, b) => Number(a.stock_qty) / reorderOf(a) - Number(b.stock_qty) / reorderOf(b)).map(v => { const [k, l, c] = stockStatus(v); const i = state.inventory.indexOf(v);
-        return `<tr><td><b>${esc(v.name)}</b></td>
-          <td><div class="row" style="flex-wrap:nowrap"><div class="stock-bar"><div style="width:${Math.min(100, Math.max(2, Number(v.stock_qty) / (reorderOf(v) * 3) * 100))}%;background:${c}"></div></div><b>${Number(v.stock_qty).toLocaleString('en-IN')}</b> <span class="muted">${esc(v.unit)}</span></div></td>
-          <td class="muted">${reorderOf(v).toLocaleString('en-IN')} ${esc(v.unit)}</td><td><span class="pill ${k}">${l}</span></td>
-          <td><div class="row"><button class="btn sm" onclick="restockModal(${i})">Restock</button><button class="btn ghost sm" onclick="invModal(${i})">Edit</button></div></td></tr>`; }).join('')}
-      </tbody></table></div>` : emptyState('No stock items yet', 'Add fruits, dairy, and packaging so recipes can track usage.')}</div>`;
+  const S = state.storeId, rows = items.map(it => ({ it, r: invRow(S, it.key) })).filter(x => x.r || x.it.is_active);
+  const value = sum(rows, x => Math.max(0, Number(x.r?.stock_qty || 0)) * (x.r?.avg_cost || 0));
+  $('inv-body').innerHTML = `<div class="grid g4" style="margin-bottom:16px">${kpi('Stock value here', inr(value), '<span class="delta flat">At average cost</span>', 'var(--berry)')}
+      ${kpi('Running low', rows.filter(x => stockStatus2(Number(x.r?.stock_qty || 0), x.it.reorder_level)[0] === 'low').length, '<span class="delta flat">Below the reorder level</span>', 'var(--mango)')}
+      ${kpi('Out of stock', rows.filter(x => ['out', 'neg'].includes(stockStatus2(Number(x.r?.stock_qty || 0), x.it.reorder_level)[0]) && x.r).length, '<span class="delta flat">Zero or below</span>', 'var(--red)')}
+      ${kpi('Packs on hand', sum(rows.filter(x => x.it.kind === 'pack'), x => Math.max(0, x.r?.stock_qty || 0)), '<span class="delta flat">Ready for drinks</span>', 'var(--leaf)')}</div>
+    <div class="panel">${tools}${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Item</th><th>In stock</th><th>Reorder below</th><th style="text-align:right">Value</th><th>Status</th></tr></thead><tbody>
+      ${rows.sort((a, b) => Number(a.r?.stock_qty || 0) / (a.it.reorder_level || 1e9) - Number(b.r?.stock_qty || 0) / (b.it.reorder_level || 1e9)).map(({ it, r }) => { const q = Number(r?.stock_qty || 0), st = stockStatus2(q, it.reorder_level);
+        return `<tr><td><b>${esc(it.name)}</b> ${it.kind === 'pack' ? '<span class="pill berry">Pack</span>' : ''}<div class="small muted">${esc(it.category)}${r?.avg_cost ? `, ${inr(r.avg_cost * (it.unit === 'pcs' ? 1 : 1000))} per ${it.unit === 'pcs' ? 'pc' : it.unit === 'g' ? 'kg' : 'L'}` : ''}</div></td>
+          <td><div class="row" style="flex-wrap:nowrap"><div class="stock-bar"><div style="width:${Math.min(100, Math.max(2, q / ((it.reorder_level || Math.max(q, 1)) * 3) * 100))}%;background:${st[0] === 'ok' ? 'var(--leaf)' : st[0] === 'low' ? 'var(--mango)' : 'var(--red)'}"></div></div><b>${fmtQty(q, it.unit)}</b></div></td>
+          <td class="muted">${it.reorder_level ? fmtQty(it.reorder_level, it.unit) : '—'}</td><td style="text-align:right">${inr(Math.max(0, q) * (r?.avg_cost || 0))}</td><td><span class="pill ${st[2]}">${st[1]}</span></td></tr>`; }).join('')}
+      </tbody></table></div>` : emptyState('No items yet', 'Add your ingredients and packs in "Items & pack recipes".')}</div>`;
+}
+
+/* ---------- buy stock (adds stock + creates a bill) ---------- */
+async function invBuy() {
+  const { data: recent } = await db.from('stock_purchases').select('*, expenses(status, amount)').in('store_id', storeFilterIds()).order('created_at', { ascending: false }).limit(30);
+  if (invStale('buy')) return;
+  const o = { cost: true, onchange: 'buyTotal()' };
+  $('inv-body').innerHTML = `<div class="grid g3" style="align-items:start">
+    <div class="panel span2" data-store-src="by-store"><h3>Buy stock</h3><p class="sub">Adds the items to stock straight away and creates a bill for approval and reimbursement. If the bill is rejected or withdrawn, the items come back out.</p>
+      <div class="grid g3" style="gap:10px"><div class="field"><label for="by-store">Bought for</label>${scopedStoreSelect('by-store', !isAll() ? state.storeId : defaultKitchen(), s => !isEvent(s) || ['live', 'upcoming'].includes(eventState(s)[0]))}</div>
+        <div class="field"><label for="by-vendor">From (shop or vendor)</label><input class="input" id="by-vendor" placeholder="Bowenpally mandi"></div>
+        <div class="field"><label for="by-date">Date</label><input class="input" id="by-date" type="date" max="${todayIST()}" value="${todayIST()}"></div></div>
+      <div class="table-wrap"><table>${lineHead(o)}<tbody id="by-lines">${lineRow(o)}${lineRow(o)}</tbody></table></div>
+      <div class="row" style="margin:8px 0 14px"><button class="btn ghost sm" onclick="$('by-lines').insertAdjacentHTML('beforeend', lineRow({cost:true,onchange:'buyTotal()'}))">+ Add item</button>
+        ${can('stock') || can('menu') ? `<button class="link-btn" onclick="itemModal()">New item not in the list?</button>` : ''}<span class="spacer"></span><b id="by-total">Total ₹0</b></div>
+      <div class="field"><label>Paid with</label><div class="seg" id="by-pay">${PAY_OUT.map(([v, l]) => `<button type="button" class="${v === 'Personal Paid (Reimbursement)' ? 'on' : ''}" data-v="${esc(v)}" onclick="this.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===this))">${l}</button>`).join('')}</div></div>
+      <div class="grid g2" style="gap:10px"><div class="field"><label for="by-inv">Bill number</label><input class="input" id="by-inv" placeholder="Optional"></div>
+        <div class="field"><label for="by-file">Bill photo ${photoLimit() > 0 ? `(needed above ${inr(photoLimit())})` : ''}</label><input class="input" id="by-file" type="file" accept="image/*,application/pdf" capture="environment"></div></div>
+      <button class="btn berry lg block" id="by-go" onclick="saveBuy()">Add to stock and send bill for approval</button></div>
+    <div class="panel"><h3>Recent purchases</h3><p class="sub">Their bills go through approval like any other.</p>
+      ${(recent || []).length ? recent.map(p => `<div style="padding:10px 0;border-bottom:1px solid var(--line)"><div class="row"><b>${esc(p.vendor || 'Purchase')}</b><span class="spacer"></span><b>${inr(p.expenses?.amount || sum(p.lines, l => l.cost))}</b></div>
+        <div class="small muted">${prettyDate(ist(p.created_at).date)}, ${esc(storeById(p.store_id)?.name || '')}, by ${esc(p.created_by || '')}</div>
+        <div class="small">${esc(recipeText(p.lines))}</div><div style="margin-top:4px">${billPill(p.expenses?.status || 'submitted')}${p.stock_applied ? '' : ' <span class="pill">Stock removed</span>'}</div></div>`).join('') : emptyState('No purchases yet', '')}</div></div>`;
+}
+function buyTotal() { let t = 0; document.querySelectorAll('#by-lines .ln-cost').forEach(i => t += parseFloat(i.value) || 0); $('by-total').textContent = 'Total ' + inr(t); }
+async function saveBuy() {
+  let lines; try { lines = readLines('by-lines', { cost: true }); } catch (e) { return toast(e.message, 'err'); }
+  const total = sum(lines, l => l.cost); if (!(total > 0)) return toast('Enter what you paid', 'err');
+  if (total > photoLimit() && !$('by-file').files[0]) return toast(`Add a photo of the bill (needed above ${inr(photoLimit())})`, 'err');
+  $('by-go').disabled = true;
+  const url = $('by-file').files[0] ? await upload($('by-file'), 'receipts') : null;
+  if ($('by-file').files[0] && !url) { $('by-go').disabled = false; return; }
+  const { data, error } = await invRpc('record_purchase', { p: { store_id: $('by-store').value, vendor: $('by-vendor').value.trim(), bill_date: $('by-date').value, invoice_no: $('by-inv').value.trim(),
+    payment_mode: document.querySelector('#by-pay button.on').dataset.v, receipt_url: url, lines } });
+  if (error) { $('by-go').disabled = false; return toast(error.message, 'err'); }
+  toast(`Added to stock. Bill for ${inr(total)} sent for approval.`, 'ok');
+  if (data?.expense?.duplicate_of) setTimeout(() => toast('Heads up: this looks like a repeat of an earlier bill.'), 600);
+  refreshBillBadge(); RENDER.inventory();
+}
+/* ---------- make packs ---------- */
+async function invMake() {
+  const { data: batches } = await db.from('pack_batches').select('*').in('store_id', scopeStores().map(s => String(s.id))).order('created_at', { ascending: false }).limit(40);
+  if (invStale('make')) return;
+  const packs = (state.cache.items || []).filter(i => i.kind === 'pack' && i.is_active);
+  const ready = packs.filter(p => state.cache.packRecipes[p.key]?.lines?.length);
+  $('inv-body').innerHTML = `<div class="grid g3" style="align-items:start">
+    <div class="panel span2" data-store-src="mk-store"><h3>Make packs</h3><p class="sub">Enter how many packs you made and what you actually used. Stock moves from the ingredients into packs, and any extra used (peel, seeds, spills) shows as wastage.</p>
+      ${ready.length ? `<div class="grid g3" style="gap:10px"><div class="field"><label for="mk-store">Made at</label>${scopedStoreSelect('mk-store', defaultKitchen())}</div>
+        <div class="field"><label for="mk-pack">Pack</label><select class="input" id="mk-pack" onchange="mkFill()">${ready.map(p => `<option value="${esc(p.key)}">${esc(p.name)}</option>`).join('')}</select></div>
+        <div class="field"><label for="mk-n">Packs made</label><input class="input" id="mk-n" type="number" min="1" step="1" value="10" oninput="mkFill()" style="font-weight:800"></div></div>
+        <div class="small muted" id="mk-recipe" style="margin-bottom:8px"></div>
+        <div class="table-wrap"><table>${lineHead({ extraHead: 'Recipe says' })}<tbody id="mk-lines"></tbody></table></div>
+        <div class="row" style="margin:10px 0"><span id="mk-cost" class="small"></span><span class="spacer"></span><button class="link-btn" onclick="mkFill()">Reset to recipe amounts</button></div>
+        <div class="field"><label for="mk-note">Note</label><input class="input" id="mk-note" placeholder="Batch from Tuesday's mandi run"></div>
+        <button class="btn berry lg block" id="mk-go" onclick="saveMake()">Record packs made</button>`
+      : emptyState('No pack recipes yet', 'Create a pack item and its recipe in "Items & pack recipes" first.')}</div>
+    <div class="panel"><h3>Recent batches</h3>${(batches || []).length ? batches.map(b => { const it = itemOf(b.pack_key), used = sum(b.used, l => l.qty), exp = sum(b.expected, l => l.qty), w = exp ? Math.round((used - exp) / exp * 100) : 0;
+      return `<div style="padding:10px 0;border-bottom:1px solid var(--line)"><div class="row"><b>${b.packs} × ${esc(it?.name || b.pack_key)}</b><span class="spacer"></span>${b.cost_per_pack ? `<span class="small">${inr(b.cost_per_pack)}/pack</span>` : ''}</div>
+        <div class="small muted">${prettyDate(b.made_on)}, ${esc(storeById(b.store_id)?.name || '')}, by ${esc(b.created_by || '')}</div>
+        <div class="small">Used ${esc(recipeText(b.used))}${w > 0 ? ` <span class="pill low">${w}% wastage</span>` : w < 0 ? ` <span class="pill">${-w}% less than recipe</span>` : ' <span class="pill ok">On recipe</span>'}</div></div>`; }).join('') : emptyState('No batches yet', '')}</div></div>`;
+  if (ready.length) mkFill();
+}
+function mkFill() {
+  const key = $('mk-pack').value, n = parseFloat($('mk-n').value) || 0, r = state.cache.packRecipes[key];
+  $('mk-recipe').textContent = `1 pack = ${recipeText(r.lines)}`;
+  const o = { haveStore: true, filter: i => i.kind === 'ingredient', onchange: 'mkCost()', extra: l => l.expected ? fmtQty(l.expected, itemOf(l.item_key)?.unit) : '' };
+  $('mk-lines').innerHTML = r.lines.map(l => lineRow(o, { item_key: l.item_key, qty: Math.round(l.qty * n * 1000) / 1000, expected: l.qty * n })).join('');
+  refreshHaves('mk-lines'); mkCost();
+}
+function mkCost() {
+  const store = $('mk-store').value, n = parseFloat($('mk-n').value) || 0; let c = 0;
+  document.querySelectorAll('#mk-lines .ln').forEach(tr => { const k = tr.querySelector('.ln-item').value, q = (parseFloat(tr.querySelector('.ln-qty').value) || 0) * UNIT_FACTOR[tr.querySelector('.ln-unit').value]; c += q * (invRow(store, k)?.avg_cost || 0); });
+  $('mk-cost').innerHTML = n > 0 && c > 0 ? `Cost about <b>${inr(c / n)}</b> per pack, ${inr(c)} for the batch` : '';
+}
+async function saveMake() {
+  let used; try { used = readLines('mk-lines'); } catch (e) { return toast(e.message, 'err'); }
+  const n = parseFloat($('mk-n').value); if (!(n > 0)) return toast('Enter how many packs you made', 'err');
+  $('mk-go').disabled = true;
+  const { data, error } = await invRpc('make_packs', { p: { store_id: $('mk-store').value, pack_key: $('mk-pack').value, packs: n, used, note: $('mk-note').value.trim() } });
+  if (error) { $('mk-go').disabled = false; return toast(error.message, 'err'); }
+  toast(`${n} ${itemOf($('mk-pack').value).name} added to stock${data.cost_per_pack ? `, ${inr(data.cost_per_pack)} each` : ''}`, 'ok'); RENDER.inventory();
+}
+
+/* ---------- send & receive ---------- */
+async function invTransfers() {
+  const ids = scopeStores().map(s => String(s.id));
+  const { data } = await db.from('stock_transfers').select('*').order('sent_at', { ascending: false }).limit(150);
+  if (invStale('transfers')) return;
+  const T = (data || []).filter(t => ids.includes(String(t.from_store)) || ids.includes(String(t.to_store))); state.cache.transfers = T;
+  const here = storeFilterIds(), incoming = T.filter(t => t.status === 'in_transit' && here.includes(String(t.to_store)));
+  const lineTxt = (lines) => (lines || []).map(l => `${fmtQty(l.qty, l.unit || itemOf(l.item_key)?.unit)} ${l.name || itemOf(l.item_key)?.name}`).join(', ');
+  const o = { haveStore: true };
+  $('inv-body').innerHTML = `
+    ${incoming.length ? `<div class="panel" style="margin-bottom:16px;border-left:5px solid var(--mango)"><h3>To receive</h3><p class="sub">Check what arrived, then confirm. Stock is added to this outlet when you confirm.</p>
+      ${incoming.map(t => `<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><div><b>Delivery #${t.transfer_no}</b> from ${esc(storeById(t.from_store)?.name || '')} to ${esc(storeById(t.to_store)?.name || '')}
+        <div class="small muted">Sent ${fmtDT(t.sent_at)} by ${esc(t.sent_by || '')}</div><div class="small">${esc(lineTxt(t.lines))}</div></div><span class="spacer"></span>
+        <button class="btn berry" onclick="receiveModal('${esc(t.id)}')">Receive</button></div>`).join('')}</div>` : ''}
+    <div class="grid g3" style="align-items:start">
+      ${can('stock') ? `<div class="panel span2" data-store-src="tr-from"><h3>Send stock</h3><p class="sub">Usually packs from the kitchen to an outlet. Stock leaves here now and arrives when the outlet confirms.</p>
+        <div class="grid g2" style="gap:10px"><div class="field"><label for="tr-from">From</label>${scopedStoreSelect('tr-from', defaultKitchen()).replace('<select', '<select onchange="refreshHaves(\'tr-lines\')"')}</div>
+          <div class="field"><label for="tr-to">To</label><select class="input" id="tr-to">${state.stores.filter(s => s.is_active !== false && (!isEvent(s) || ['live', 'upcoming'].includes(eventState(s)[0]))).map(s => `<option value="${esc(s.id)}" ${!isKitchen(s) && sameId(s.id, state.storeId) ? 'selected' : ''}>${storeEmoji(s)} ${esc(s.name)}</option>`).join('')}</select></div></div>
+        <div class="table-wrap"><table>${lineHead(o)}<tbody id="tr-lines">${lineRow(o)}${lineRow(o)}</tbody></table></div>
+        <div class="row" style="margin:8px 0 12px"><button class="btn ghost sm" onclick="$('tr-lines').insertAdjacentHTML('beforeend', lineRow({haveStore:true}))">+ Add item</button></div>
+        <div class="field"><label for="tr-note">Note</label><input class="input" id="tr-note" placeholder="Sent with Raju on the 7 AM run"></div>
+        <button class="btn berry lg block" id="tr-go" onclick="saveSend()">Send</button></div>` : ''}
+      <div class="panel ${can('stock') ? '' : 'span2'}"><h3>Recent deliveries</h3>${T.length ? T.slice(0, 30).map(t => { const short = t.status === 'received' ? (t.lines || []).filter(l => { const r = (t.received || []).find(x => x.item_key === l.item_key); return r && Number(r.qty) < Number(l.qty); }) : [];
+        return `<div style="padding:10px 0;border-bottom:1px solid var(--line)"><div class="row"><b>#${t.transfer_no}</b><span class="small">${esc(storeById(t.from_store)?.name || '')} → ${esc(storeById(t.to_store)?.name || '')}</span><span class="spacer"></span>
+          <span class="pill ${t.status === 'received' ? 'ok' : t.status === 'cancelled' ? '' : 'low'}">${{ in_transit: 'On the way', received: 'Received', cancelled: 'Cancelled' }[t.status]}</span></div>
+          <div class="small">${esc(lineTxt(t.lines))}</div>${short.length ? `<div class="small" style="color:var(--red)">Short: ${esc(short.map(l => `${fmtQty(Number(l.qty) - Number((t.received || []).find(x => x.item_key === l.item_key).qty), l.unit)} ${l.name}`).join(', '))}</div>` : ''}
+          <div class="small muted">${fmtDT(t.sent_at)}${t.received_by ? `, received by ${esc(t.received_by)}` : ''}${t.receive_note ? `, "${esc(t.receive_note)}"` : ''}</div>
+          ${t.status === 'in_transit' && can('stock') && inScope(t.from_store) ? `<button class="link-btn" onclick="cancelSend('${esc(t.id)}')">Cancel delivery</button>` : ''}</div>`; }).join('') : emptyState('No deliveries yet', '')}</div></div>`;
+}
+async function saveSend() {
+  let lines; try { lines = readLines('tr-lines'); } catch (e) { return toast(e.message, 'err'); }
+  if ($('tr-from').value === $('tr-to').value) return toast('Pick a different place to send to', 'err');
+  $('tr-go').disabled = true;
+  const { data, error } = await invRpc('send_stock', { p: { from_store: $('tr-from').value, to_store: $('tr-to').value, lines, note: $('tr-note').value.trim() } });
+  if (error) { $('tr-go').disabled = false; return toast(error.message, 'err'); }
+  toast(`Delivery #${data.transfer_no} sent. It arrives when ${storeById($('tr-to').value)?.name} confirms.`, 'ok'); RENDER.inventory();
+}
+function receiveModal(id) {
+  const t = state.cache.transfers.find(x => sameId(x.id, id));
+  openModal(`<h2>Receive delivery #${t.transfer_no}</h2><p class="sub">From ${esc(storeById(t.from_store)?.name || '')}. Change a number only if less arrived (damaged or missing).</p>
+    <div class="table-wrap"><table><thead><tr><th>Item</th><th>Sent</th><th>Received</th></tr></thead><tbody>${t.lines.map((l, i) => `<tr><td><b>${esc(l.name)}</b></td><td>${fmtQty(l.qty, l.unit)}</td>
+      <td><input class="input rv-q" data-k="${esc(l.item_key)}" type="number" min="0" max="${l.qty}" step="0.001" value="${l.qty}" style="width:110px"> ${esc(l.unit)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="field" style="margin-top:10px"><label for="rv-note">Note</label><input class="input" id="rv-note" placeholder="2 packs leaked"></div>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" id="rv-go" onclick="saveReceive('${esc(t.id)}')">Confirm received</button></div>`);
+}
+async function saveReceive(id) {
+  $('rv-go').disabled = true;
+  const received = [...document.querySelectorAll('.rv-q')].map(i => ({ item_key: i.dataset.k, qty: parseFloat(i.value) || 0 }));
+  const { error } = await invRpc('receive_transfer', { p_transfer_id: id, p_received: received, p_note: $('rv-note').value.trim() });
+  if (error) { $('rv-go').disabled = false; return toast(error.message, 'err'); }
+  closeModal(); toast('Delivery received and added to stock', 'ok'); RENDER.inventory();
+}
+async function cancelSend(id) {
+  const reason = await promptBox('Cancel this delivery?', 'The items go back into stock where they were sent from.', 'Reason', 'Cancel delivery'); if (!reason) return;
+  const { error } = await invRpc('cancel_transfer', { p_transfer_id: id, p_reason: reason });
+  if (error) return toast(error.message, 'err'); toast('Delivery cancelled', 'ok'); RENDER.inventory();
+}
+
+/* ---------- count & waste ---------- */
+function invCount() {
+  const o = { reason: true, haveStore: true };
+  const def = isAll() ? defaultKitchen() : state.storeId;
+  $('inv-body').innerHTML = `<div class="grid ${can('stock') ? 'g2' : ''}" style="align-items:start">
+    ${can('stock') ? `<div class="panel"><h3>Count stock</h3><p class="sub">Enter what's actually on the shelf. The difference from the system is recorded. Use "Opening stock" for packs and items you already had before starting.</p>
+      <div class="grid g2" style="gap:10px"><div class="field"><label for="ct-store">Where</label>${scopedStoreSelect('ct-store', def).replace('<select', '<select onchange="drawCountRows()"')}</div>
+        <div class="field"><label>Type</label><div class="seg" id="ct-type"><button class="on" data-v="count" onclick="[...this.parentNode.children].forEach(b=>b.classList.toggle('on',b===this))">Stock count</button><button data-v="opening" onclick="[...this.parentNode.children].forEach(b=>b.classList.toggle('on',b===this))">Opening stock</button></div></div></div>
+      <div class="chips" style="margin-bottom:8px">${[['all', 'Everything'], ['ingredient', 'Ingredients'], ['pack', 'Packs']].map(([k, l]) => `<button class="chip ${k === 'all' ? 'on' : ''}" data-k="${k}" onclick="[...this.parentNode.children].forEach(b=>b.classList.toggle('on',b===this));drawCountRows()">${l}</button>`).join('')}</div>
+      <div class="table-wrap" style="max-height:460px"><table><thead><tr><th>Item</th><th>System says</th><th>Counted</th><th></th></tr></thead><tbody id="ct-rows"></tbody></table></div>
+      <p class="small muted" style="margin:8px 0">Leave a row empty to skip it.</p>
+      <button class="btn berry block" id="ct-go" onclick="saveCount()">Save counts</button></div>` : ''}
+    <div class="panel" data-store-src="ws-store"><h3>Record wastage</h3><p class="sub">Spoilt fruit, dropped packs, expired items. This takes them out of stock.</p>
+      <div class="field"><label for="ws-store">Where</label>${scopedStoreSelect('ws-store', isAll() ? defaultKitchen() : state.storeId).replace('<select', '<select onchange="refreshHaves(\'ws-lines\')"')}</div>
+      <div class="table-wrap"><table>${lineHead(o)}<tbody id="ws-lines">${lineRow(o)}</tbody></table></div>
+      <div class="row" style="margin:8px 0 12px"><button class="btn ghost sm" onclick="$('ws-lines').insertAdjacentHTML('beforeend', lineRow({reason:true,haveStore:true}))">+ Add item</button></div>
+      <button class="btn block" id="ws-go" onclick="saveWaste()">Record wastage</button></div></div>`;
+  if (can('stock')) drawCountRows();
+}
+function drawCountRows() {
+  const store = $('ct-store').value, k = document.querySelector('#v-inventory .chips .chip.on[data-k]')?.dataset.k || 'all';
+  const items = (state.cache.items || []).filter(i => i.is_active && (k === 'all' || i.kind === k));
+  $('ct-rows').innerHTML = items.map(i => { const h = haveAt(store, i.key), u = i.unit, big = u !== 'pcs';
+    return `<tr><td><b>${esc(i.name)}</b> ${i.kind === 'pack' ? '<span class="pill berry">Pack</span>' : ''}</td><td class="muted">${fmtQty(h, u)}</td>
+      <td style="white-space:nowrap"><input class="input ct-q" data-k="${esc(i.key)}" type="number" min="0" step="0.001" style="width:100px" placeholder="—"> <select class="input ct-u" style="width:70px;display:inline-block">${unitChoices(u).map(x => `<option>${x}</option>`).join('')}</select></td><td></td></tr>`; }).join('') || `<tr><td>${emptyState('No items', '')}</td></tr>`;
+}
+async function saveCount() {
+  const counts = [...document.querySelectorAll('.ct-q')].filter(i => i.value !== '').map(i => ({ item_key: i.dataset.k, qty: Math.round(parseFloat(i.value) * UNIT_FACTOR[i.closest('td').querySelector('.ct-u').value] * 1000) / 1000 }));
+  if (!counts.length) return toast('Enter at least one count', 'err');
+  if (counts.some(c => !(c.qty >= 0))) return toast('Counts must be zero or more', 'err');
+  $('ct-go').disabled = true;
+  const reason = document.querySelector('#ct-type button.on').dataset.v;
+  const { data, error } = await invRpc('count_stock', { p: { store_id: $('ct-store').value, reason, counts } });
+  if (error) { $('ct-go').disabled = false; return toast(error.message, 'err'); }
+  toast(`${data.changed} item${data.changed === 1 ? '' : 's'} corrected`, 'ok'); RENDER.inventory();
+}
+async function saveWaste() {
+  let lines; try { lines = readLines('ws-lines', { reason: true }); } catch (e) { return toast(e.message, 'err'); }
+  $('ws-go').disabled = true;
+  const { error } = await invRpc('record_waste', { p: { store_id: $('ws-store').value, lines } });
+  if (error) { $('ws-go').disabled = false; return toast(error.message, 'err'); }
+  toast('Wastage recorded', 'ok'); RENDER.inventory();
+}
+
+/* ---------- items & pack recipes ---------- */
+function invItems() {
+  const items = state.cache.items || [], can2 = can('stock') || can('menu');
+  $('inv-body').innerHTML = `<div class="panel"><div class="row" style="margin-bottom:10px"><h3 style="margin:0">Items</h3><span class="spacer"></span>${can2 ? '<button class="btn ghost" onclick="itemModal(null,\'pack\')">+ New pack</button><button class="btn berry" onclick="itemModal()">+ New ingredient</button>' : ''}</div>
+    <p class="sub">Ingredients are what you buy (in grams, millilitres or pieces). Packs are what the kitchen makes from them; each pack has a recipe. Drink recipes (in Recipes) can use both.</p>
+    ${['pack', 'ingredient'].map(kind => `<h3 style="margin:16px 0 6px">${kind === 'pack' ? 'Packs' : 'Ingredients'}</h3><div class="table-wrap"><table><tbody>
+      ${items.filter(i => i.kind === kind).map(i => { const r = state.cache.packRecipes[i.key]; return `<tr style="${i.is_active ? '' : 'opacity:.5'}"><td><b>${esc(i.name)}</b>${i.is_active ? '' : ' <span class="pill">Hidden</span>'}<div class="small muted">${esc(i.category)}, in ${i.unit}${i.reorder_level ? `, reorder below ${fmtQty(i.reorder_level, i.unit)}` : ''}${i.bill_category ? `, bills go to "${esc(catInfo(i.bill_category)[2])}"` : ''}</div></td>
+        <td class="small">${kind === 'pack' ? (r?.lines?.length ? `1 pack = ${esc(recipeText(r.lines))}` : '<span class="pill low">No recipe yet</span>') : ''}</td>
+        <td style="text-align:right;white-space:nowrap">${can2 && kind === 'pack' ? `<button class="btn ${r?.lines?.length ? 'ghost' : 'berry'} sm" onclick="packRecipeModal('${esc(i.key)}')">${r?.lines?.length ? 'Edit recipe' : 'Add recipe'}</button> ` : ''}${can2 ? `<button class="btn ghost sm" onclick="itemModal('${esc(i.key)}')">Edit</button>` : ''}</td></tr>`; }).join('') || `<tr><td class="muted">None yet</td></tr>`}
+    </tbody></table></div>`).join('')}</div>`;
+}
+function itemModal(key, kind) {
+  const i = key ? itemOf(key) : { kind: kind || 'ingredient', unit: kind === 'pack' ? 'pcs' : 'g', category: kind === 'pack' ? 'Packs' : 'Fruit', reorder_level: 0, is_active: true, bill_category: kind === 'pack' ? '' : 'Produce & Fruits' };
+  openModal(`<h2>${key ? 'Edit ' + esc(i.name) : i.kind === 'pack' ? 'New pack' : 'New ingredient'}</h2><p class="sub">${i.kind === 'pack' ? 'A pack is counted in pieces. Add its recipe after saving.' : 'Measured in grams, millilitres or pieces. You can still type kg or litres when buying.'}</p>
+    <div class="field"><label for="it-name">Name</label><input class="input" id="it-name" value="${esc(i.name || '')}" placeholder="${i.kind === 'pack' ? 'Mango pack' : 'Mango'}"></div>
+    <div class="grid g3" style="gap:10px"><div class="field"><label for="it-kind">Type</label><select class="input" id="it-kind"><option value="ingredient" ${i.kind === 'ingredient' ? 'selected' : ''}>Ingredient</option><option value="pack" ${i.kind === 'pack' ? 'selected' : ''}>Pack</option></select></div>
+      <div class="field"><label for="it-unit">Measured in</label><select class="input" id="it-unit">${[['g', 'Grams'], ['ml', 'Millilitres'], ['pcs', 'Pieces']].map(([u, l]) => `<option value="${u}" ${i.unit === u ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="field"><label for="it-cat">Group</label><select class="input" id="it-cat">${ITEM_CATS.map(c => `<option ${i.category === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div></div>
+    <div class="grid g2" style="gap:10px"><div class="field"><label for="it-reorder">Warn when below (in its unit)</label><input class="input" id="it-reorder" type="number" min="0" value="${esc(i.reorder_level || 0)}"></div>
+      <div class="field"><label for="it-bill">When bought, the bill goes to</label><select class="input" id="it-bill"><option value="">Not bought directly</option>${EXPENSE_CATS.map(([v, ic, l]) => `<option value="${esc(v)}" ${i.bill_category === v ? 'selected' : ''}>${ic} ${l}</option>`).join('')}</select></div></div>
+    ${key ? `<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="it-hide" ${i.is_active ? '' : 'checked'} style="width:18px;height:18px;accent-color:var(--berry)"> Hide from lists</label>` : ''}
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" onclick="saveItem(${key ? `'${esc(key)}'` : 'null'})">Save</button></div>`);
+}
+async function saveItem(key) {
+  const p = { name: $('it-name').value.trim(), kind: $('it-kind').value, unit: $('it-unit').value, category: $('it-cat').value, reorder_level: $('it-reorder').value, bill_category: $('it-bill').value, is_active: !($('it-hide')?.checked) };
+  const { data, error } = await invRpc('save_stock_item', { p_key: key, p });
+  if (error) return toast(error.message, 'err'); closeModal(); toast(`${p.name} saved`, 'ok');
+  await loadStock();
+  if (!key && p.kind === 'pack') return packRecipeModal(data.key);
+  if (state.view === 'inventory') RENDER.inventory(); else if (state.view === 'recipes') RENDER.recipes();
+}
+function packRecipeModal(key) {
+  const p = itemOf(key), r = state.cache.packRecipes[key], o = { filter: i => i.kind === 'ingredient' };
+  openModal(`<h2>Recipe for 1 ${esc(p.name)}</h2><p class="sub">What goes into one pack. Making packs uses this to work out how much was used and how much was wasted.</p>
+    <div class="table-wrap"><table>${lineHead(o)}<tbody id="pr-lines">${(r?.lines?.length ? r.lines : [{}, {}]).map(l => lineRow(o, l)).join('')}</tbody></table></div>
+    <div class="row" style="margin:8px 0 12px"><button class="btn ghost sm" onclick="$('pr-lines').insertAdjacentHTML('beforeend', lineRow({filter: i => i.kind === 'ingredient'}))">+ Add ingredient</button></div>
+    <div class="field"><label for="pr-notes">Notes</label><input class="input" id="pr-notes" value="${esc(r?.notes || '')}" placeholder="Freeze flat; label with date"></div>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" onclick="savePackRecipe('${esc(key)}')">Save recipe</button></div>`, true);
+}
+async function savePackRecipe(key) {
+  let lines; try { lines = readLines('pr-lines'); } catch (e) { return toast(e.message, 'err'); }
+  const { error } = await invRpc('save_pack_recipe', { p_pack_key: key, p_lines: lines, p_notes: $('pr-notes').value.trim() });
+  if (error) return toast(error.message, 'err'); closeModal(); toast('Pack recipe saved', 'ok'); await loadStock(); RENDER.inventory();
+}
+
+/* ---------- history ---------- */
+const MOVE_LABEL = { purchase: ['Bought', 'ok'], purchase_reversed: ['Purchase undone', 'out'], pack_used: ['Used for packs', ''], pack_made: ['Packs made', 'ok'], transfer_out: ['Sent', 'navy'],
+  transfer_in: ['Received', 'ok'], transfer_back: ['Delivery cancelled', ''], sale: ['Sold', 'berry'], void_return: ['Sale voided', ''], count: ['Count correction', 'low'], opening: ['Opening stock', 'low'], waste: ['Wasted', 'out'] };
+async function invHistory() {
+  const r = range('inv');
+  $('inv-body').innerHTML = periodBar('inv', `<button class="btn ghost sm" onclick="exportXLSX(state.cache.moves.map(m => ({ Time: fmtDT(m.created_at), Outlet: storeById(m.store_id)?.name || '', Item: itemOf(m.item_key)?.name || m.item_key, Change: Number(m.qty), Unit: itemOf(m.item_key)?.unit || '', Reason: (MOVE_LABEL[m.reason] || [m.reason])[0], Note: m.note || '', By: m.created_by })), 'stock-history')">Download</button>`) +
+    `<div class="chips" style="margin-bottom:12px">${[['all', 'Everything'], ['purchase', 'Bought'], ['pack_made', 'Packs made'], ['transfer_in', 'Received'], ['transfer_out', 'Sent'], ['sale', 'Sold'], ['waste', 'Wasted'], ['count', 'Counts']].map(([k, l]) => `<button class="chip ${state.inv.moveReason === k ? 'on' : ''}" onclick="state.inv.moveReason='${k}';invHistory()">${l}</button>`).join('')}</div><div id="mv-body">${LOADING}</div>`;
+  const rows = await fetchAll(() => { let q = db.from('stock_moves').select('*').in('store_id', storeFilterIds()).gte('created_at', dayStart(r.s)).lte('created_at', dayEnd(r.e)).order('created_at', { ascending: false });
+    if (state.inv.moveReason !== 'all') q = state.inv.moveReason === 'count' ? q.in('reason', ['count', 'opening']) : q.eq('reason', state.inv.moveReason); return q; }, 'Loading history');
+  if (invStale('history')) return;
+  state.cache.moves = rows;
+  $('mv-body').innerHTML = `<div class="panel">${rows.length ? `<div class="table-wrap"><table><thead><tr><th>When</th>${isAll() ? '<th>Where</th>' : ''}<th>Item</th><th style="text-align:right">Change</th><th>What happened</th><th>Note</th><th>By</th></tr></thead><tbody>
+    ${rows.slice(0, 500).map(m => { const it = itemOf(m.item_key); return `<tr><td class="small">${fmtDT(m.created_at)}</td>${isAll() ? `<td class="small">${esc(storeById(m.store_id)?.name || '')}</td>` : ''}<td><b>${esc(it?.name || m.item_key || '')}</b></td>
+      <td style="text-align:right;font-weight:700;color:${m.qty >= 0 ? 'var(--leaf)' : 'var(--red)'}">${m.qty >= 0 ? '+' : '−'}${fmtQty(Math.abs(m.qty), it?.unit)}</td>
+      <td><span class="pill ${(MOVE_LABEL[m.reason] || ['', ''])[1]}">${(MOVE_LABEL[m.reason] || [m.reason])[0]}</span></td><td class="small">${esc(m.note || '')}</td><td class="small">${esc(m.created_by || '')}</td></tr>`; }).join('')}
+    </tbody></table></div>${rows.length > 500 ? '<p class="small muted">Showing the latest 500. Download for everything.</p>' : ''}` : emptyState('No stock changes in this period', '')}</div>`;
+}
+
+/* ---------- drink recipes (cost and margin per drink) ---------- */
+RENDER.recipes = async function () {
+  const el = $('v-recipes'); el.innerHTML = LOADING;
+  if (!(await loadStock()) || state.view !== 'recipes') return;
+  const drinks = state.drinks.slice().sort((a, b) => a.name.localeCompare(b.name));
+  const cost = d => sum(d.recipe_items || [], ri => { const r = (state.cache.inv || []).find(x => sameId(x.id, ri.inventory_id)); return (r?.avg_cost || 0) * ri.qty_required; });
+  el.innerHTML = `<div class="grid g3" style="align-items:start">
+    <div class="panel"><h3>Drinks</h3><p class="sub">Pick a drink to set exactly what goes into one cup. Every sale takes these out of stock.</p>
+      <div style="display:flex;flex-direction:column;gap:6px">${drinks.map(d => { const c = cost(d); return `<button class="btn ghost" style="justify-content:space-between" onclick="editRecipe(${state.drinks.indexOf(d)})">
+        <span style="text-align:left">${esc(d.name)}<br><span class="small muted">${(d.recipe_items || []).length ? `Cost ${c ? inr(c) : '?'}${c ? `, margin ${pct(d.base_price - c, d.base_price)}%` : ''}` : 'No recipe yet'}</span></span>
+        ${(d.recipe_items || []).length ? `<span class="pill ok">${d.recipe_items.length} items</span>` : '<span class="pill low">Not set</span>'}</button>`; }).join('') || emptyState('No drinks', 'Add drinks in Menu first.')}</div></div>
+    <div class="panel span2" id="rec-edit">${emptyState('Pick a drink', 'Its recipe will show here as a simple table.')}</div></div>`;
+  if (state.recIdx != null && state.drinks[state.recIdx]) editRecipe(state.recIdx);
 };
-function invModal(i) {
-  const v = i == null ? {} : state.inventory[i];
-  openModal(`<h2>${i == null ? 'Add a stock item' : 'Edit ' + esc(v.name)}</h2><p class="sub">Set a reorder level to get a "Running low" warning.</p>
-    <div class="field"><label for="i-name">Name</label><input class="input" id="i-name" value="${esc(v.name || '')}" placeholder="Kokum"></div>
-    <div class="grid g2" style="gap:10px"><div class="field"><label for="i-unit">Measured in</label><select class="input" id="i-unit">${[['g', 'Grams'], ['ml', 'Millilitres'], ['pcs', 'Pieces']].map(([u, l]) => `<option value="${u}" ${v.unit === u ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-      <div class="field"><label for="i-reorder">Reorder below</label><input class="input" id="i-reorder" type="number" value="${esc(v.reorder_level ?? 1000)}"></div></div>
-    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" onclick="saveInv(${i ?? 'null'})">Save item</button></div>`);
+function editRecipe(i) {
+  state.recIdx = i; const d = state.drinks[i];
+  const lines = (d.recipe_items || []).map(ri => { const r = (state.cache.inv || []).find(x => sameId(x.id, ri.inventory_id)); return { item_key: r?.item_key, qty: ri.qty_required }; }).filter(l => l.item_key);
+  const o = { onchange: 'recCost()', bigUnits: false, extra: () => '' };
+  $('rec-edit').innerHTML = `<h3>${esc(d.name)}</h3><p class="sub">One cup. Packs come from the kitchen; water, ice, honey and cups are counter items.</p>
+    <div class="table-wrap"><table>${lineHead({ extraHead: 'Cost' })}<tbody id="rc-lines">${(lines.length ? lines : [{}, {}, {}]).map(l => lineRow(o, l)).join('')}</tbody></table></div>
+    <div class="row" style="margin:8px 0"><button class="btn ghost sm" onclick="$('rc-lines').insertAdjacentHTML('beforeend', lineRow({onchange:'recCost()',bigUnits:false,extra:()=>''}))">+ Add item</button>
+      ${can('stock') || can('menu') ? '<button class="link-btn" onclick="itemModal()">New item not in the list?</button>' : ''}<span class="spacer"></span><span id="rc-cost"></span></div>
+    ${scopeStores().filter(s => !isEvent(s) || true).length > 1 ? `<label style="display:flex;gap:8px;align-items:center;font-size:14px;margin:10px 0"><input type="checkbox" id="rc-all" checked style="width:18px;height:18px;accent-color:var(--berry)"> Use the same recipe for "${esc(d.name)}" at all my outlets and events</label>` : ''}
+    <div class="row"><span class="spacer"></span><button class="btn berry" onclick="saveDrinkRecipe()">Save recipe</button></div>`;
+  recCost();
 }
-async function saveInv(i) {
-  const name = $('i-name').value.trim(); if (!name) return toast('Add a name', 'err');
-  const payload = { name, unit: $('i-unit').value, reorder_level: parseFloat($('i-reorder').value) || 0 };
-  const { error } = i == null ? await db.from('inventory').insert({ ...payload, store_id: state.storeId, stock_qty: 0 }) : await db.from('inventory').update(payload).eq('id', state.inventory[i].id);
-  if (fail(error, 'Saving stock item')) return;
-  closeModal(); toast(`${name} saved`, 'ok'); await refreshStore(); RENDER.inventory();
+function recCost() {
+  const d = state.drinks[state.recIdx]; let total = 0;
+  document.querySelectorAll('#rc-lines .ln').forEach(tr => { const k = tr.querySelector('.ln-item').value, q = (parseFloat(tr.querySelector('.ln-qty').value) || 0) * UNIT_FACTOR[tr.querySelector('.ln-unit').value];
+    const c = q * (invRow(d.store_id, k)?.avg_cost || 0); total += c; tr.querySelector('.ln-extra').textContent = k && c ? inr(c) : ''; });
+  $('rc-cost').innerHTML = total ? `Cost per cup <b>${inr(total)}</b>, sells at ${inr(d.base_price)}, margin <b>${pct(d.base_price - total, d.base_price)}%</b>` : '<span class="small muted">Cost shows once items have been bought or received here.</span>';
 }
-function restockModal(i) {
-  const v = state.inventory[i];
-  openModal(`<h2>Restock ${esc(v.name)}</h2><p class="sub">Currently ${Number(v.stock_qty).toLocaleString('en-IN')} ${esc(v.unit)}. The cost is counted in Money in &amp; out.</p>
-    <div class="grid g2" style="gap:10px"><div class="field"><label for="r-qty">Quantity added (${esc(v.unit)})</label><input class="input" id="r-qty" type="number" placeholder="15000"></div>
-      <div class="field"><label for="r-cost">Total cost (₹)</label><input class="input" id="r-cost" type="number" placeholder="0"></div></div>
-    <div class="field"><label for="r-note">Vendor or batch note</label><input class="input" id="r-note"></div>
-    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" onclick="saveRestock(${i})">Add to stock</button></div>`);
-}
-async function saveRestock(i) {
-  const v = state.inventory[i], qty = parseFloat($('r-qty').value);
-  if (!(qty > 0)) return toast('Enter how much came in', 'err');
-  const { error } = await db.from('grocery_inward').insert({ store_id: state.storeId, inventory_id: v.id, qty_added: qty, cost_price: parseFloat($('r-cost').value) || 0, vendor_notes: $('r-note').value.trim() });
-  if (fail(error, 'Restocking')) return;
-  closeModal(); toast(`${v.name} restocked`, 'ok'); await refreshStore(); RENDER.inventory();
+async function saveDrinkRecipe() {
+  const d = state.drinks[state.recIdx]; let lines;
+  try { lines = readLines('rc-lines'); } catch (e) { if (e.message !== 'Add at least one item') return toast(e.message, 'err'); lines = []; }
+  const { data, error } = await invRpc('save_drink_recipe', { p_drink_id: String(d.id), p_lines: lines, p_all_outlets: !!$('rc-all')?.checked });
+  if (error) return toast(error.message, 'err');
+  toast(`Recipe saved${data.drinks > 1 ? ` for ${data.drinks} outlets` : ''}`, 'ok'); await refreshStore(); RENDER.recipes();
 }
 
 /* =========================================================
@@ -2036,10 +2362,10 @@ RENDER.stores = async function () {
       <button class="${state.storesTab === 'events' ? 'on' : ''}" onclick="state.storesTab='events';RENDER.stores()">🎪 Events (${events.length})</button></div>`;
 
   if (state.storesTab === 'outlets') {
-    el.innerHTML = `<div class="period">${tabs}<span class="spacer"></span><button class="btn berry" onclick="storeModal()">+ Add outlet</button></div>
+    el.innerHTML = `<div class="period">${tabs}<span class="spacer"></span><button class="btn ghost" onclick="storeModal(null,'kitchen')">+ Add kitchen</button><button class="btn berry" onclick="storeModal()">+ Add outlet</button></div>
       <div class="grid g3">${outlets.map(s => { const x = stat(s.id), here = sameId(s.id, state.storeId), days = (s.operating_days || DAYS.join(',')).split(','), evs = events.filter(e => sameId(e.parent_store_id, s.id)).length;
         return `<div class="panel" style="${here ? 'outline:3px solid var(--berry);outline-offset:-3px' : ''}">
-          <div class="row"><h3 style="margin:0">📍 ${esc(s.name)}</h3><span class="spacer"></span>${s.is_active === false ? '<span class="pill out">Closed for good</span>' : openNow(s) ? '<span class="pill ok">Open now</span>' : '<span class="pill">Closed now</span>'}</div>
+          <div class="row"><h3 style="margin:0">${storeEmoji(s)} ${esc(s.name)}</h3><span class="spacer"></span>${s.is_active === false ? '<span class="pill out">Closed for good</span>' : openNow(s) ? '<span class="pill ok">Open now</span>' : '<span class="pill">Closed now</span>'}</div>
           <p class="sub" style="margin:4px 0 12px">${esc([s.location_tag, s.city].filter(Boolean).join(', ') || 'No location set')}</p>
           <div style="font-size:22px;font-weight:800">${esc((s.open_time || '08:00').slice(0, 5))} to ${esc((s.close_time || '22:30').slice(0, 5))}</div>
           <div class="row" style="gap:4px;margin:10px 0 14px">${DAYS.map(d => `<span class="pill ${days.includes(d) ? 'berry' : ''}" style="${days.includes(d) ? '' : 'opacity:.4'}">${d}</span>`).join('')}</div>
@@ -2120,10 +2446,11 @@ async function saveEvent(id) {
   closeModal(); toast(`${name} saved`, 'ok'); await loadStores(); state.storesTab = 'events'; RENDER.stores();
 }
 
-function storeModal(id) {
-  const s = id ? state.stores.find(x => sameId(x.id, id)) : { operating_days: DAYS.join(','), open_time: '08:00', close_time: '22:30' };
+function storeModal(id, kind) {
+  const s = id ? state.stores.find(x => sameId(x.id, id)) : { operating_days: DAYS.join(','), open_time: '08:00', close_time: '22:30', kind: kind || 'outlet' };
+  state.storeKind = s.kind || 'outlet';
   const days = (s.operating_days || DAYS.join(',')).split(',');
-  openModal(`<h2>${id ? 'Edit ' + esc(s.name) : 'Add an outlet'}</h2><p class="sub">Hours and days show on the Outlets page.</p>
+  openModal(`<h2>${id ? 'Edit ' + esc(s.name) : state.storeKind === 'kitchen' ? 'Add a central kitchen' : 'Add an outlet'}</h2><p class="sub">${state.storeKind === 'kitchen' ? 'Where bulk ingredients are bought and packed, then sent to outlets. It has its own stock but no counter.' : 'Hours and days show on the Outlets page.'}</p>
     <div class="field"><label for="s-name">Outlet name</label><input class="input" id="s-name" value="${esc(s.name || '')}" placeholder="Inorbit Mall kiosk"></div>
     <div class="grid g2" style="gap:10px"><div class="field"><label for="s-tag">Location</label><input class="input" id="s-tag" value="${esc(s.location_tag || '')}" placeholder="Ground floor atrium"></div>
       <div class="field"><label for="s-city">City</label><input class="input" id="s-city" value="${esc(s.city || 'Hyderabad')}"></div></div>
@@ -2139,7 +2466,7 @@ async function saveStore(id) {
   const payload = { name, location_tag: $('s-tag').value.trim(), city: $('s-city').value.trim(), open_time: $('s-open').value, close_time: $('s-close').value,
     operating_days: [...document.querySelectorAll('#s-days button.on')].map(b => b.dataset.d).join(',') };
   if (!id) {
-    const { data, error } = await db.from('stores').insert({ ...payload, kind: 'outlet', is_active: true }).select().single();
+    const { data, error } = await db.from('stores').insert({ ...payload, kind: state.storeKind || 'outlet', is_active: true }).select().single();
     if (fail(error, 'Adding outlet')) return;
     const src = $('s-copy').value;
     if (src) { const r = await db.rpc('replicate_store_menu', { source_store_id: src, target_store_id: data.id }); fail(r.error, 'Copying menu'); }
@@ -3662,6 +3989,51 @@ function makeDemoClient() {
     { id: nid('rb'), name: 'Jubilee Hills electricity', store_id: 's2', category: 'Electricity & Water', vendor: 'TSSPDCL', amount: 6500, amount_varies: true, owner_staff_id: 'u4', frequency: 'monthly', next_date: today, payment_mode: 'Vendor to be paid', is_active: true },
     { id: nid('rb'), name: 'Airtel broadband (both outlets)', store_id: 's1', category: 'Internet & Phone', vendor: 'Airtel', amount: 1178, amount_varies: false, frequency: 'monthly', next_date: addDays(today, 6), payment_mode: 'Vendor to be paid', is_active: true },
     { id: nid('rb'), name: 'Blender loan EMI', store_id: 's1', category: 'Loan EMI', vendor: 'Bajaj Finance', amount: 8400, amount_varies: false, frequency: 'monthly', next_date: addDays(today, 12), end_date: addDays(today, 300), payment_mode: 'Vendor to be paid', account_id: 'a2300', is_active: true }];
+  // ---------- Stock in the sample data: kitchen, packs, transfers ----------
+  T.stores.push({ id: 'k1', kind: 'kitchen', name: 'Central Kitchen', city: 'Hyderabad', location_tag: 'Kukatpally', is_active: true, created_at: '2026-01-05T00:00:00Z', operating_days: 'Mon,Tue,Wed,Thu,Fri,Sat,Sun' });
+  T.stock_moves = []; T.pack_batches = []; T.stock_purchases = []; T.stock_transfers = []; T.pack_recipes = []; T.pack_recipe_items = [];
+  const CATG = n => /cup|straw/i.test(n) ? ['Packaging', 'Packaging & Straws'] : /honey|syrup/i.test(n) ? ['Sweeteners & syrups', 'Dairy, Ice & Boosters'] : /whey|chia/i.test(n) ? ['Boosters', 'Dairy, Ice & Boosters'] : /ice/i.test(n) ? ['Dairy & ice', 'Dairy, Ice & Boosters'] : /water/i.test(n) ? ['Other', ''] : ['Fruit', 'Produce & Fruits'];
+  T.stock_items = [...new Map(T.inventory.map(v => [v.name.toLowerCase(), v])).values()].map(v => ({ key: v.name.toLowerCase(), name: v.name, unit: v.unit, kind: 'ingredient', category: CATG(v.name)[0], bill_category: CATG(v.name)[1] || null, reorder_level: v.reorder_level, is_active: true }));
+  T.stock_items.push({ key: 'water', name: 'Water', unit: 'ml', kind: 'ingredient', category: 'Other', bill_category: null, reorder_level: 5000, is_active: true },
+    { key: 'ice', name: 'Ice', unit: 'g', kind: 'ingredient', category: 'Dairy & ice', bill_category: 'Dairy, Ice & Boosters', reorder_level: 3000, is_active: true },
+    { key: 'mango pack', name: 'Mango pack', unit: 'pcs', kind: 'pack', category: 'Packs', bill_category: null, reorder_level: 20, is_active: true },
+    { key: 'berry pack', name: 'Berry pack', unit: 'pcs', kind: 'pack', category: 'Packs', bill_category: null, reorder_level: 15, is_active: true },
+    { key: 'watermelon ginger pack', name: 'Watermelon ginger pack', unit: 'pcs', kind: 'pack', category: 'Packs', bill_category: null, reorder_level: 15, is_active: true });
+  T.inventory.forEach(v => { v.item_key = v.name.toLowerCase(); v.avg_cost = v._cost || 0; });
+  T.pack_recipes = [{ pack_key: 'mango pack' }, { pack_key: 'berry pack' }, { pack_key: 'watermelon ginger pack', notes: 'Mixed and frozen together' }];
+  T.pack_recipe_items = [{ id: nid('pri'), pack_key: 'mango pack', item_key: 'alphonso mango pulp', qty: 105 }, { id: nid('pri'), pack_key: 'berry pack', item_key: 'mixed berries', qty: 120 },
+    { id: nid('pri'), pack_key: 'watermelon ginger pack', item_key: 'watermelon', qty: 300 }, { id: nid('pri'), pack_key: 'watermelon ginger pack', item_key: 'ginger', qty: 5 }];
+  const dRow = (store, key) => { let r = T.inventory.find(v => v.store_id === store && v.item_key === key); if (r) return r; const it = T.stock_items.find(i => i.key === key);
+    r = { id: nid('i'), store_id: store, name: it.name, unit: it.unit, stock_qty: 0, reorder_level: it.reorder_level, item_key: key, avg_cost: 0 }; T.inventory.push(r); return r; };
+  const dMoveRow = (r, qty, reason, note, by, cost, at) => { if (!qty) return; const have = Math.max(r.stock_qty, 0);
+    if (qty > 0 && cost != null && have + qty > 0) r.avg_cost = Math.round((have * (r.avg_cost || 0) + qty * cost) / (have + qty) * 10000) / 10000;
+    r.stock_qty = Math.round((r.stock_qty + qty) * 1000) / 1000;
+    T.stock_moves.push({ id: nid('mv'), store_id: r.store_id, inventory_id: r.id, item_key: r.item_key, qty, reason, unit_cost: cost ?? r.avg_cost, note: note || null, created_by: by || 'System', created_at: at || new Date().toISOString() }); };
+  const dMove = (store, key, qty, reason, note, by, cost, at) => dMoveRow(dRow(store, key), qty, reason, note, by, cost, at);
+  // Kitchen bought and packed this week; outlets got deliveries.
+  { const at = d => new Date(Date.now() - d * 864e5).toISOString();
+    dMove('k1', 'alphonso mango pulp', 12000, 'purchase', 'Bowenpally mandi', 'Ravi Teja', 0.12, at(3)); dMove('k1', 'mixed berries', 4000, 'purchase', 'Fresh Berries Co', 'Ravi Teja', 0.6, at(3));
+    dMove('k1', 'watermelon', 20000, 'purchase', 'Bowenpally mandi', 'Ravi Teja', 0.025, at(3)); dMove('k1', 'ginger', 500, 'purchase', 'Bowenpally mandi', 'Ravi Teja', 0.16, at(3));
+    const batch = (key, packs, used, d) => { const b = { id: nid('pb'), store_id: 'k1', pack_key: key, packs, made_on: at(d).slice(0, 10), used, expected: T.pack_recipe_items.filter(x => x.pack_key === key).map(x => ({ item_key: x.item_key, qty: x.qty * packs })), created_by: 'Manoj Kumar', created_at: at(d) };
+      let c = 0; used.forEach(u => { c += u.qty * (dRow('k1', u.item_key).avg_cost || 0); dMove('k1', u.item_key, -u.qty, 'pack_used', packs + ' × ' + key, 'Manoj Kumar', null, at(d)); });
+      b.cost_per_pack = Math.round(c / packs * 100) / 100; dMove('k1', key, packs, 'pack_made', null, 'Manoj Kumar', c / packs, at(d)); T.pack_batches.push(b); };
+    batch('mango pack', 100, [{ item_key: 'alphonso mango pulp', qty: 11000 }], 2.5); batch('berry pack', 30, [{ item_key: 'mixed berries', qty: 3700 }], 2.4); batch('watermelon ginger pack', 60, [{ item_key: 'watermelon', qty: 19000 }, { item_key: 'ginger', qty: 300 }], 2.3);
+    const send = (to, lines, d, received) => { const t = { id: nid('tr'), transfer_no: T.stock_transfers.length + 101, from_store: 'k1', to_store: to, lines: lines.map(([k, q]) => ({ item_key: k, name: T.stock_items.find(i => i.key === k).name, unit: 'pcs', qty: q, unit_cost: dRow('k1', k).avg_cost })),
+        status: received ? 'received' : 'in_transit', sent_by: 'Manoj Kumar', sent_at: at(d) };
+      t.lines.forEach(l => dMove('k1', l.item_key, -l.qty, 'transfer_out', 'To ' + T.stores.find(s => s.id === to).name, 'Manoj Kumar', null, at(d)));
+      if (received) { t.received = t.lines.map(l => ({ item_key: l.item_key, qty: l.qty - (l.item_key === 'mango pack' ? 2 : 0) })); t.received_by = 'Priya Reddy'; t.received_at = at(d - .1); t.receive_note = '2 mango packs leaked';
+        t.received.forEach(r => dMove(to, r.item_key, r.qty, 'transfer_in', 'From Central Kitchen', 'Priya Reddy', t.lines.find(l => l.item_key === r.item_key).unit_cost, at(d - .1))); }
+      T.stock_transfers.unshift(t); };
+    send('s1', [['mango pack', 40], ['berry pack', 15], ['watermelon ginger pack', 25]], 2, true);
+    send('s2', [['mango pack', 30], ['watermelon ginger pack', 20]], 0.2, false);
+    ['s1', 's2'].forEach(s => { dMove(s, 'water', 40000, 'opening', 'Opening stock', 'Sai Kumar', 0, at(4)); dMove(s, 'ice', 15000, 'opening', 'Opening stock', 'Sai Kumar', 0.004, at(4)); dMove(s, 'mango pack', s === 's2' ? 6 : 0, 'opening', 'Already packed', 'Sai Kumar', 13, at(4)); });
+    dMove('s1', 'mango pack', -3, 'waste', 'Thawed overnight', 'Ravi Teja', null, at(0.5));
+    // Mango drinks use a Mango pack + water + ice + honey at every outlet.
+    T.drinks.filter(d => d.name === 'Mango Tango').forEach(d => { T.recipe_items = T.recipe_items.filter(r => r.drink_id !== d.id);
+      [['mango pack', 1], ['water', 100], ['ice', 50], ['honey', 10], ['cups 400 ml', 1]].forEach(([k, q]) => T.recipe_items.push({ id: nid('r'), drink_id: d.id, inventory_id: dRow(d.store_id, k).id, qty_required: q })); });
+    T.drinks.filter(d => d.name === 'Berry Blast').forEach(d => { T.recipe_items = T.recipe_items.filter(r => r.drink_id !== d.id);
+      [['berry pack', 1], ['water', 80], ['ice', 60], ['cups 400 ml', 1]].forEach(([k, q]) => T.recipe_items.push({ id: nid('r'), drink_id: d.id, inventory_id: dRow(d.store_id, k).id, qty_required: q })); });
+  }
   // Two accidental repeat bills today at the first outlet, like a retry on slow internet.
   T.orders.filter(o => o.store_id === 's1' && o.created_at.slice(0, 10) >= addDays(today, -1) && T.order_items.filter(i => i.order_id === o.id).length >= 2).slice(-2).forEach(o => {
     const copy = { ...o, id: nid('o'), receipt_no: 'BTJ-' + (rc++), created_at: new Date(Date.parse(o.created_at) + 38000).toISOString() };
@@ -3680,6 +4052,7 @@ function makeDemoClient() {
     if (t === 'orders') { const c = byId('customers'), g = {}; T.order_items.forEach(x => (g[x.order_id] = g[x.order_id] || []).push(x)); return rows.map(r => ({ ...r, customers: c.get(r.customer_id) || null, order_items: g[r.id] || [] })); }
     if (t === 'order_items') { const o = byId('orders'), c = byId('customers'); return rows.map(r => { const x = o.get(r.order_id); return { ...r, orders: x ? { created_at: x.created_at, store_id: x.store_id, customers: c.get(x.customer_id) || null } : null }; }); }
     if (t === 'expenses') { const s = byId('stores'); return rows.map(r => ({ ...r, stores: s.get(r.store_id) ? { name: s.get(r.store_id).name } : null })); }
+    if (t === 'stock_purchases') { const e = byId('expenses'); return rows.map(r => ({ ...r, expenses: e.get(r.expense_id) ? { status: e.get(r.expense_id).status, amount: e.get(r.expense_id).amount } : null })); }
     if (t === 'grocery_inward') { const i = byId('inventory'); return rows.map(r => ({ ...r, inventory: i.get(r.inventory_id) || null })); }
     return rows.map(r => ({ ...r }));
   }
@@ -3793,6 +4166,7 @@ function makeDemoClient() {
         if (to === 'approved' && s.role !== 'admin' && s.approval_limit != null && e.amount > s.approval_limit) throw new Error(`This bill is above your approval limit of ₹${s.approval_limit}. An admin or someone with a higher limit has to approve it.`);
         if (to !== 'approved' && !note) throw new Error('Add a reason so the team knows what to fix');
         Object.assign(e, { status: to, decided_by: s.name, decided_by_id: s.id, decided_at: new Date().toISOString(), decision_note: note || null });
+        T.stock_purchases.filter(pu => pu.expense_id === e.id && pu.stock_applied && to === 'rejected').forEach(pu => { pu.lines.forEach(l => dMove(pu.store_id, l.item_key, -l.qty, 'purchase_reversed', 'Bill rejected', 'System')); pu.stock_applied = false; });
         logE(e, a.p_decision, 'submitted', to, s, note, { amount: e.amount }); return { data: e, error: null };
       }
       if (fn === 'pay_expense') {
@@ -3963,6 +4337,51 @@ function makeDemoClient() {
             T.expenses.push(e); T.expense_events.push({ id: nid('ev'), expense_id: e.id, action: 'submitted', to_status: e.status, actor_name: 'Recurring bills', note: `Created automatically from "${b.name}"`, details: {}, created_at: e.created_at });
             const dt = new Date(b.next_date + 'T12:00:00'); dt.setMonth(dt.getMonth() + (b.frequency === 'monthly' ? 1 : b.frequency === 'quarterly' ? 3 : 12)); b.next_date = dt.toISOString().slice(0, 10); n++; k++; } });
         return { data: n, error: null }; }
+      const needS = (perms) => needP(a.p_staff_id, a.p_pin, perms);
+      const chkLines = ls => { if (!Array.isArray(ls) || !ls.length) throw new Error('Add at least one item'); ls.forEach(l => { if (!T.stock_items.some(i => i.key === l.item_key)) throw new Error('Pick an item on every line'); if (!(+l.qty > 0)) throw new Error('Enter a quantity above zero'); }); };
+      const haveD = (s, k) => (T.inventory.find(v => sameId(v.store_id, s) && v.item_key === k) || {}).stock_qty || 0;
+      const itD = k => T.stock_items.find(i => i.key === k);
+      if (fn === 'save_stock_item') { needS(['stock', 'menu']); const p = a.p; if (!p.name) throw new Error('Add a name');
+        if (a.p_key) { const it = itD(a.p_key); Object.assign(it, { ...p, reorder_level: +p.reorder_level || 0, bill_category: p.bill_category || null, is_active: p.is_active !== false }); T.inventory.filter(v => v.item_key === it.key).forEach(v => { v.name = it.name; v.unit = it.unit; v.reorder_level = it.reorder_level; }); return { data: it, error: null }; }
+        const key = p.name.trim().toLowerCase(); if (itD(key)) throw new Error(`There is already an item called ${p.name}`);
+        const it = { key, name: p.name.trim(), unit: p.unit, kind: p.kind, category: p.category, bill_category: p.bill_category || null, reorder_level: +p.reorder_level || 0, is_active: true }; T.stock_items.push(it); return { data: it, error: null }; }
+      if (fn === 'save_pack_recipe') { needS(['stock', 'menu']); chkLines(a.p_lines); if (a.p_lines.some(l => itD(l.item_key).kind === 'pack')) throw new Error('A pack is made from ingredients, not other packs');
+        T.pack_recipes = T.pack_recipes.filter(r => r.pack_key !== a.p_pack_key).concat([{ pack_key: a.p_pack_key, notes: a.p_notes }]);
+        T.pack_recipe_items = T.pack_recipe_items.filter(r => r.pack_key !== a.p_pack_key).concat(a.p_lines.map(l => ({ id: nid('pri'), pack_key: a.p_pack_key, item_key: l.item_key, qty: +l.qty }))); return { data: null, error: null }; }
+      if (fn === 'make_packs') { const s = needS(['stock']), p = a.p, n = +p.packs; if (!(n > 0)) throw new Error('Enter how many packs you made');
+        const exp = T.pack_recipe_items.filter(r => r.pack_key === p.pack_key).map(r => ({ item_key: r.item_key, qty: r.qty * n })); if (!exp.length) throw new Error('Set up the recipe first');
+        const used = (p.used && p.used.length) ? p.used : exp; chkLines(used);
+        used.forEach(u => { if (haveD(p.store_id, u.item_key) < u.qty) throw new Error(`Only ${fmtQty(haveD(p.store_id, u.item_key), itD(u.item_key).unit)} of ${itD(u.item_key).name} in stock here, but ${fmtQty(u.qty, itD(u.item_key).unit)} is needed. Record the purchase or a stock count first.`); });
+        let c = 0; used.forEach(u => { c += u.qty * (dRow(p.store_id, u.item_key).avg_cost || 0); dMove(p.store_id, u.item_key, -u.qty, 'pack_used', n + ' × ' + itD(p.pack_key).name, s.name); });
+        dMove(p.store_id, p.pack_key, n, 'pack_made', null, s.name, c / n);
+        const b = { id: nid('pb'), store_id: p.store_id, pack_key: p.pack_key, packs: n, made_on: todayIST(), used, expected: exp, cost_per_pack: Math.round(c / n * 100) / 100, note: p.note, created_by: s.name, created_at: new Date().toISOString() };
+        T.pack_batches.unshift(b); return { data: b, error: null }; }
+      if (fn === 'record_purchase') { const s = needS(['expense_submit', 'stock']), p = a.p; chkLines(p.lines); const amt = sum(p.lines, l => l.cost); if (!(amt > 0)) throw new Error('Enter what you paid');
+        const top = p.lines.slice().sort((x, y) => y.cost - x.cost)[0], cat = itD(top.item_key).bill_category || 'Produce & Fruits';
+        validate(s, { store_id: p.store_id, category: cat, amount: amt, receipt_url: p.receipt_url });
+        const e = { id: nid('e'), store_id: p.store_id, category: cat, amount: amt, payment_mode: p.payment_mode, vendor: p.vendor || null, invoice_no: p.invoice_no || null, bill_date: p.bill_date || todayIST(),
+          notes: 'Stock: ' + p.lines.map(l => fmtQty(l.qty, itD(l.item_key).unit) + ' ' + itD(l.item_key).name).join(', '), receipt_url: p.receipt_url, submitted_by: s.name, submitted_by_id: s.id, status: 'submitted', created_at: new Date().toISOString() };
+        T.expenses.push(e); logE(e, 'submitted', null, 'submitted', s, null, { amount: amt, stock: true });
+        const pu = { id: nid('pu'), store_id: p.store_id, expense_id: e.id, vendor: e.vendor, lines: p.lines, stock_applied: true, created_by: s.name, created_at: e.created_at }; T.stock_purchases.unshift(pu);
+        p.lines.forEach(l => dMove(p.store_id, l.item_key, +l.qty, 'purchase', e.vendor, s.name, l.cost / l.qty)); return { data: { expense: e, purchase: pu }, error: null }; }
+      if (fn === 'send_stock') { const s = needS(['stock']), p = a.p; chkLines(p.lines); if (p.from_store === p.to_store) throw new Error('Pick the outlet you are sending to');
+        p.lines.forEach(l => { if (haveD(p.from_store, l.item_key) < l.qty) throw new Error(`Only ${fmtQty(haveD(p.from_store, l.item_key), itD(l.item_key).unit)} of ${itD(l.item_key).name} here to send`); });
+        const t = { id: nid('tr'), transfer_no: T.stock_transfers.length + 101, from_store: p.from_store, to_store: p.to_store, status: 'in_transit', sent_by: s.name, sent_at: new Date().toISOString(), note: p.note,
+          lines: p.lines.map(l => ({ item_key: l.item_key, name: itD(l.item_key).name, unit: itD(l.item_key).unit, qty: +l.qty, unit_cost: dRow(p.from_store, l.item_key).avg_cost })) };
+        t.lines.forEach(l => dMove(p.from_store, l.item_key, -l.qty, 'transfer_out', 'To ' + T.stores.find(x => sameId(x.id, p.to_store)).name, s.name)); T.stock_transfers.unshift(t); return { data: t, error: null }; }
+      if (fn === 'receive_transfer') { const s = needS(['stock', 'pos']), t = T.stock_transfers.find(x => sameId(x.id, a.p_transfer_id)); if (!t || t.status !== 'in_transit') throw new Error('This delivery is already received or cancelled');
+        if (!scope(s, t.to_store)) throw new Error('Only the receiving outlet can confirm this');
+        t.received = t.lines.map(l => { const r = (a.p_received || []).find(x => x.item_key === l.item_key), q = r ? +r.qty : l.qty; if (q < 0 || q > l.qty) throw new Error(`Received quantity of ${l.name} must be between 0 and what was sent`); return { item_key: l.item_key, qty: q }; });
+        t.received.forEach(r => { const l = t.lines.find(x => x.item_key === r.item_key); dMove(t.to_store, r.item_key, r.qty, 'transfer_in', 'From ' + T.stores.find(x => x.id === t.from_store).name + (r.qty < l.qty ? `, ${fmtQty(l.qty - r.qty, l.unit)} short` : ''), s.name, l.unit_cost); });
+        Object.assign(t, { status: 'received', received_by: s.name, received_at: new Date().toISOString(), receive_note: a.p_note }); return { data: t, error: null }; }
+      if (fn === 'cancel_transfer') { const s = needS(['stock']), t = T.stock_transfers.find(x => sameId(x.id, a.p_transfer_id)); if (!t || t.status !== 'in_transit') throw new Error('Only deliveries still on the way can be cancelled');
+        t.lines.forEach(l => dMove(t.from_store, l.item_key, l.qty, 'transfer_back', a.p_reason, s.name, l.unit_cost)); t.status = 'cancelled'; return { data: null, error: null }; }
+      if (fn === 'count_stock') { const s = needS(['stock']), p = a.p; let n = 0; (p.counts || []).forEach(c => { const d = c.qty - haveD(p.store_id, c.item_key); if (d) { dMove(p.store_id, c.item_key, d, p.reason === 'opening' ? 'opening' : 'count', p.reason === 'opening' ? 'Opening stock' : 'Stock count', s.name); n++; } }); return { data: { changed: n }, error: null }; }
+      if (fn === 'record_waste') { const s = needS(['stock', 'pos']), p = a.p; chkLines(p.lines); p.lines.forEach(l => dMove(p.store_id, l.item_key, -l.qty, 'waste', l.reason || 'Wasted', s.name)); return { data: { lines: p.lines.length }, error: null }; }
+      if (fn === 'save_drink_recipe') { const s = needS(['menu']), d = T.drinks.find(x => sameId(x.id, a.p_drink_id)); if (a.p_lines.length) chkLines(a.p_lines);
+        const targets = T.drinks.filter(x => x.id === d.id || (a.p_all_outlets && x.name.toLowerCase() === d.name.toLowerCase() && scope(s, x.store_id)));
+        targets.forEach(t => { T.recipe_items = T.recipe_items.filter(r => r.drink_id !== t.id); a.p_lines.forEach(l => T.recipe_items.push({ id: nid('r'), drink_id: t.id, inventory_id: dRow(t.store_id, l.item_key).id, qty_required: +l.qty })); });
+        return { data: { drinks: targets.length }, error: null }; }
       if (fn === 'void_order') {
         const s = check(a.p_admin_id, a.p_admin_pin), o = T.orders.find(x => sameId(x.id, a.p_order_id));
         if (!perm(s, 'void_bills')) throw new Error("You don't have access to void bills");
@@ -3996,7 +4415,7 @@ function makeDemoClient() {
           barista_id: s.id, barista_name: s.name, receipt_no: 'BTJ-' + (rc++), cash_tendered: tendered, change_due: tendered - total, created_at: new Date().toISOString(), client_ref: p.client_ref, status: 'paid' };
         T.orders.push(o);
         const items = lines.map(l => { const it = { id: nid('oi'), order_id: o.id, drink_id: l.d.id, drink_name: l.d.name, selected_addons: l.addons, price: l.price, feedback_rating: null }; T.order_items.push(it);
-          T.recipe_items.filter(r => r.drink_id === l.d.id).forEach(r => { const v = T.inventory.find(x => x.id === r.inventory_id); if (v) v.stock_qty -= r.qty_required; });
+          T.recipe_items.filter(r => r.drink_id === l.d.id).forEach(r => { const v = T.inventory.find(x => x.id === r.inventory_id); if (v) dMoveRow(v, -r.qty_required, 'sale', l.d.name, 'Sale'); });
           l.addons.forEach(ad => { const t = T.toppings.find(x => x.id === ad.id), v = T.inventory.find(x => x.id === t.inventory_id); if (v) v.stock_qty -= t.qty_used; });
           return { id: it.id, drink_name: it.drink_name, price: it.price }; });
         return { data: { order: o, items }, error: null };
@@ -4012,7 +4431,7 @@ function makeDemoClient() {
 function startDemo() {
   db = makeDemoClient(); state.demo = true; state.storeId = null;
   $('demo-pill').classList.remove('hidden');
-  $('demo-box').innerHTML = '<p class="small" style="color:var(--leaf);font-weight:700">Sample data loaded. Tap any name and enter PIN 1234. Try Sai Kumar (admin), Suma (payroll), Kavya Iyer (accountant), Priya Reddy (works at two outlets), Ananya Rao (finance), Manoj Kumar (store manager) or Ravi Teja (barista). Neha Varma is locked out and Imran Khan has a temporary PIN.</p>';
+  $('demo-box').innerHTML = '<p class="small" style="color:var(--leaf);font-weight:700">Sample data loaded. Tap any name and enter PIN 1234. Try Sai Kumar (admin, see Stock), Suma (payroll), Kavya Iyer (accountant), Priya Reddy (works at two outlets), Ananya Rao (finance), Manoj Kumar (store manager) or Ravi Teja (barista). Neha Varma is locked out and Imran Khan has a temporary PIN.</p>';
   loadLoginStaff();
 }
 </script>
