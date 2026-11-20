@@ -718,7 +718,7 @@ async function enterApp() {
   checkSchema();
 }
 // The app needs database version 7. If Supabase is behind, tell admins exactly what to do.
-const NEEDED_SCHEMA = 8;
+const NEEDED_SCHEMA = 9;
 async function checkSchema() {
   if (state.demo) return;
   const { data, error } = await db.rpc('btj_schema_version');
@@ -2230,10 +2230,10 @@ async function saveWaste() {
 /* ---------- items & pack recipes ---------- */
 function invItems() {
   const items = state.cache.items || [], can2 = can('stock') || can('menu');
-  $('inv-body').innerHTML = `<div class="panel"><div class="row" style="margin-bottom:10px"><h3 style="margin:0">Items</h3><span class="spacer"></span>${can2 ? '<button class="btn ghost" onclick="itemModal(null,\'pack\')">+ New pack</button><button class="btn berry" onclick="itemModal()">+ New ingredient</button>' : ''}</div>
-    <p class="sub">Ingredients are what you buy (in grams, millilitres or pieces). Packs are what the kitchen makes from them; each pack has a recipe. Drink recipes (in Recipes) can use both.</p>
+  $('inv-body').innerHTML = `<div class="panel"><div class="row" style="margin-bottom:10px"><h3 style="margin:0">Items</h3><span class="spacer"></span>${isAdmin() ? '<button class="btn danger" id="it-del" disabled onclick="deleteItemsFlow(pickedItems())">Delete selected</button>' : ''}${can2 ? '<button class="btn ghost" onclick="itemModal(null,\'pack\')">+ New pack</button><button class="btn berry" onclick="itemModal()">+ New ingredient</button>' : ''}</div>
+    <p class="sub">Ingredients are what you buy (in grams, millilitres or pieces). Packs are what the kitchen makes from them; each pack has a recipe. Drink recipes (in Recipes) can use both.${isAdmin() ? ' Tick items to delete them.' : ''}</p>
     ${['pack', 'ingredient'].map(kind => `<h3 style="margin:16px 0 6px">${kind === 'pack' ? 'Packs' : 'Ingredients'}</h3><div class="table-wrap"><table><tbody>
-      ${items.filter(i => i.kind === kind).map(i => { const r = state.cache.packRecipes[i.key]; return `<tr style="${i.is_active ? '' : 'opacity:.5'}"><td><b>${esc(i.name)}</b>${i.is_active ? '' : ' <span class="pill">Hidden</span>'}<div class="small muted">${esc(i.category)}, in ${i.unit}${i.reorder_level ? `, reorder below ${fmtQty(i.reorder_level, i.unit)}` : ''}${i.bill_category ? `, bills go to "${esc(catInfo(i.bill_category)[2])}"` : ''}</div></td>
+      ${items.filter(i => i.kind === kind).map(i => { const r = state.cache.packRecipes[i.key]; return `<tr style="${i.is_active ? '' : 'opacity:.5'}">${isAdmin() ? `<td style="width:30px"><input type="checkbox" class="it-pick" value="${esc(i.key)}" onchange="syncItemPicks()" style="width:18px;height:18px;accent-color:var(--red)"></td>` : ''}<td><b>${esc(i.name)}</b>${i.is_active ? '' : ' <span class="pill">Hidden</span>'}<div class="small muted">${esc(i.category)}, in ${i.unit}${i.reorder_level ? `, reorder below ${fmtQty(i.reorder_level, i.unit)}` : ''}${i.bill_category ? `, bills go to "${esc(catInfo(i.bill_category)[2])}"` : ''}</div></td>
         <td class="small">${kind === 'pack' ? (r?.lines?.length ? `1 pack = ${esc(recipeText(r.lines))}` : '<span class="pill low">No recipe yet</span>') : ''}</td>
         <td style="text-align:right;white-space:nowrap">${can2 && kind === 'pack' ? `<button class="btn ${r?.lines?.length ? 'ghost' : 'berry'} sm" onclick="packRecipeModal('${esc(i.key)}')">${r?.lines?.length ? 'Edit recipe' : 'Add recipe'}</button> ` : ''}${can2 ? `<button class="btn ghost sm" onclick="itemModal('${esc(i.key)}')">Edit</button>` : ''}</td></tr>`; }).join('') || `<tr><td class="muted">None yet</td></tr>`}
     </tbody></table></div>`).join('')}</div>`;
@@ -2248,7 +2248,7 @@ function itemModal(key, kind) {
     <div class="grid g2" style="gap:10px"><div class="field"><label for="it-reorder">Warn when below (in its unit)</label><input class="input" id="it-reorder" type="number" min="0" value="${esc(i.reorder_level || 0)}"></div>
       <div class="field"><label for="it-bill">When bought, the bill goes to</label><select class="input" id="it-bill"><option value="">Not bought directly</option>${EXPENSE_CATS.map(([v, ic, l]) => `<option value="${esc(v)}" ${i.bill_category === v ? 'selected' : ''}>${ic} ${l}</option>`).join('')}</select></div></div>
     ${key ? `<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="it-hide" ${i.is_active ? '' : 'checked'} style="width:18px;height:18px;accent-color:var(--berry)"> Hide from lists</label>` : ''}
-    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" onclick="saveItem(${key ? `'${esc(key)}'` : 'null'})">Save</button></div>`);
+    <div class="modal-actions">${key && isAdmin() ? `<button class="btn danger" onclick="deleteItemsFlow(['${esc(key)}'])">Delete</button>` : ''}<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn berry" onclick="saveItem(${key ? `'${esc(key)}'` : 'null'})">Save</button></div>`);
 }
 async function saveItem(key) {
   const p = { name: $('it-name').value.trim(), kind: $('it-kind').value, unit: $('it-unit').value, category: $('it-cat').value, reorder_level: $('it-reorder').value, bill_category: $('it-bill').value, is_active: !($('it-hide')?.checked) };
@@ -2270,6 +2270,42 @@ async function savePackRecipe(key) {
   let lines; try { lines = readLines('pr-lines'); } catch (e) { return toast(e.message, 'err'); }
   const { error } = await invRpc('save_pack_recipe', { p_pack_key: key, p_lines: lines, p_notes: $('pr-notes').value.trim() });
   if (error) return toast(error.message, 'err'); closeModal(); toast('Pack recipe saved', 'ok'); await loadStock(); RENDER.inventory();
+}
+
+/* ---------- delete stock items (admin) ---------- */
+function pickedItems() { return [...document.querySelectorAll('.it-pick:checked')].map(c => c.value); }
+function syncItemPicks() { const n = pickedItems().length, b = $('it-del'); if (b) { b.disabled = !n; b.textContent = n ? `Delete ${n} selected` : 'Delete selected'; } }
+async function deleteItemsFlow(keys) {
+  if (!keys.length) return toast('Tick the items to delete', 'err');
+  const { data, error } = await db.rpc('stock_item_usage', { p_admin_id: String(state.me.id), p_admin_pin: state.pin, p_keys: keys });
+  if (error) return toast(error.message, 'err');
+  const L = data || [], busy = L.filter(u => u.in_transit > 0);
+  const li = (label, arr) => arr.length ? `<div class="small"><b>${label}:</b> ${esc(arr.join(', '))}</div>` : '';
+  openModal(`<h2>Delete ${L.length === 1 ? esc(L[0].name) : L.length + ' items'}?</h2>
+    <p class="sub">This removes ${L.length === 1 ? 'it' : 'them'} from every kitchen and outlet for good, along with stock levels, recipe lines, booster links and stock history. Sales, bills and the books are not affected.</p>
+    ${busy.length ? `<div class="cust-hint new" style="margin-bottom:12px">${esc(busy.map(u => u.name).join(', '))} ${busy.length === 1 ? 'is' : 'are'} in a delivery that's still on the way. Receive or cancel it first.</div>` : ''}
+    <div style="max-height:300px;overflow:auto;margin-bottom:12px">${L.map(u => `<div class="fb-card" style="padding:12px;margin-bottom:8px"><div class="row"><b>${esc(u.name)}</b>${u.kind === 'pack' ? ' <span class="pill berry">Pack</span>' : ''}<span class="spacer"></span>
+      ${Number(u.qty) ? `<span class="pill low">${fmtQty(u.qty, u.unit)} in stock across ${u.places} place${u.places === 1 ? '' : 's'}</span>` : '<span class="pill">No stock</span>'}</div>
+      ${li('Drink recipes that lose it', u.drinks)}${li('Pack recipes that lose it', u.packs)}${li('Boosters unlinked', u.boosters)}
+      <div class="small muted">${u.moves} stock history ${u.moves === 1 ? 'entry' : 'entries'} will be removed</div></div>`).join('')}</div>
+    <div class="field"><label for="dl-why">Reason (saved in the change history)</label><input class="input" id="dl-why" placeholder="Sample data from setup"></div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:14px;margin-bottom:6px"><input type="checkbox" id="dl-ok" style="width:18px;height:18px;accent-color:var(--red)" onchange="$('dl-go').disabled=!this.checked"> I understand this can't be undone</label>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn ghost" onclick="hideItems(${esc(JSON.stringify(keys))})" title="Keeps history; just removes from lists">Hide instead</button>
+      <button class="btn danger" id="dl-go" disabled ${busy.length ? 'style="display:none"' : ''} onclick='doDeleteItems(${esc(JSON.stringify(keys))})'>Delete for good</button></div>`, true);
+}
+async function doDeleteItems(keys) {
+  const why = $('dl-why').value.trim(); if (!why) return toast('Add a reason', 'err');
+  $('dl-go').disabled = true;
+  const { data, error } = await db.rpc('delete_stock_items', { p_admin_id: String(state.me.id), p_admin_pin: state.pin, p_keys: keys, p_reason: why });
+  if (error) { $('dl-go').disabled = false; return toast(error.message, 'err'); }
+  closeModal(); toast(`Deleted: ${data.deleted}`, 'ok'); await refreshStore(); RENDER.inventory();
+}
+async function hideItems(keys) {
+  for (const k of keys) { const i = itemOf(k); if (!i) continue;
+    const { error } = await invRpc('save_stock_item', { p_key: k, p: { name: i.name, kind: i.kind, unit: i.unit, category: i.category, reorder_level: i.reorder_level, bill_category: i.bill_category || '', is_active: false } });
+    if (error) return toast(error.message, 'err'); }
+  closeModal(); toast(`Hidden. ${keys.length === 1 ? 'It stays' : 'They stay'} in history but won't show in lists.`, 'ok'); RENDER.inventory();
 }
 
 /* ---------- history ---------- */
@@ -3444,7 +3480,7 @@ function drawUsers() {
     (!f.store || s.role === 'admin' || s.all_stores || (s.store_ids || []).map(String).includes(f.store)) &&
     (!f.q || s.name.toLowerCase().includes(f.q.toLowerCase()) || String(s.phone || '').includes(f.q)));
   const ACT = { access_changed: 'changed access for', staff_created: 'added', staff_deactivated: 'deactivated', staff_reactivated: 'reactivated', bill_override: 'overrode a bill status',
-    pin_reset: 'reset the PIN for', pin_changed: 'changed their own PIN', staff_unlocked: 'unlocked', profile_changed: 'edited the profile of' };
+    pin_reset: 'reset the PIN for', pin_changed: 'changed their own PIN', staff_unlocked: 'unlocked', profile_changed: 'edited the profile of', stock_items_deleted: 'deleted stock items' };
   const nameOf = id => all.find(s => sameId(s.id, id))?.name || '';
   el.innerHTML = `
     <div class="grid g4" style="margin-bottom:16px">
@@ -4378,6 +4414,21 @@ function makeDemoClient() {
         t.lines.forEach(l => dMove(t.from_store, l.item_key, l.qty, 'transfer_back', a.p_reason, s.name, l.unit_cost)); t.status = 'cancelled'; return { data: null, error: null }; }
       if (fn === 'count_stock') { const s = needS(['stock']), p = a.p; let n = 0; (p.counts || []).forEach(c => { const d = c.qty - haveD(p.store_id, c.item_key); if (d) { dMove(p.store_id, c.item_key, d, p.reason === 'opening' ? 'opening' : 'count', p.reason === 'opening' ? 'Opening stock' : 'Stock count', s.name); n++; } }); return { data: { changed: n }, error: null }; }
       if (fn === 'record_waste') { const s = needS(['stock', 'pos']), p = a.p; chkLines(p.lines); p.lines.forEach(l => dMove(p.store_id, l.item_key, -l.qty, 'waste', l.reason || 'Wasted', s.name)); return { data: { lines: p.lines.length }, error: null }; }
+      if (fn === 'stock_item_usage') { check(a.p_admin_id, a.p_admin_pin, true);
+        return { data: a.p_keys.map(k => { const it = itD(k); if (!it) return null; const rows = T.inventory.filter(v => v.item_key === k), ids = rows.map(v => v.id);
+          return { key: k, name: it.name, unit: it.unit, kind: it.kind, places: rows.filter(v => v.stock_qty).length, qty: sum(rows, v => v.stock_qty),
+            drinks: [...new Set(T.recipe_items.filter(r => ids.includes(r.inventory_id)).map(r => (T.drinks.find(d => d.id === r.drink_id) || {}).name))],
+            packs: [...new Set(T.pack_recipe_items.filter(x => x.item_key === k && !a.p_keys.includes(x.pack_key)).map(x => itD(x.pack_key).name))],
+            boosters: T.toppings.filter(t => ids.includes(t.inventory_id)).map(t => t.name), moves: T.stock_moves.filter(m => m.item_key === k).length,
+            in_transit: T.stock_transfers.filter(t => t.status === 'in_transit' && t.lines.some(l => l.item_key === k)).length }; }).filter(Boolean), error: null }; }
+      if (fn === 'delete_stock_items') { const ad = check(a.p_admin_id, a.p_admin_pin, true), keys = a.p_keys; if (!a.p_reason) throw new Error('Add a reason. It is saved in the change history.');
+        const busy = T.stock_transfers.filter(t => t.status === 'in_transit' && t.lines.some(l => keys.includes(l.item_key))); if (busy.length) throw new Error('One of these is in a delivery that is still on the way. Receive or cancel that delivery first.');
+        const ids = T.inventory.filter(v => keys.includes(v.item_key)).map(v => v.id), names = keys.map(k => itD(k)?.name).filter(Boolean).join(', ');
+        T.toppings.forEach(t => { if (ids.includes(t.inventory_id)) t.inventory_id = null; }); T.recipe_items = T.recipe_items.filter(r => !ids.includes(r.inventory_id));
+        T.pack_recipe_items = T.pack_recipe_items.filter(x => !keys.includes(x.item_key) && !keys.includes(x.pack_key)); T.pack_recipes = T.pack_recipes.filter(x => !keys.includes(x.pack_key));
+        T.pack_batches = T.pack_batches.filter(x => !keys.includes(x.pack_key)); T.stock_moves = T.stock_moves.filter(m => !keys.includes(m.item_key));
+        T.inventory = T.inventory.filter(v => !keys.includes(v.item_key)); T.stock_items = T.stock_items.filter(i => !keys.includes(i.key));
+        audit(ad, 'stock_items_deleted', 'stock_item', keys.join(','), { names, reason: a.p_reason }); return { data: { deleted: names }, error: null }; }
       if (fn === 'save_drink_recipe') { const s = needS(['menu']), d = T.drinks.find(x => sameId(x.id, a.p_drink_id)); if (a.p_lines.length) chkLines(a.p_lines);
         const targets = T.drinks.filter(x => x.id === d.id || (a.p_all_outlets && x.name.toLowerCase() === d.name.toLowerCase() && scope(s, x.store_id)));
         targets.forEach(t => { T.recipe_items = T.recipe_items.filter(r => r.drink_id !== t.id); a.p_lines.forEach(l => T.recipe_items.push({ id: nid('r'), drink_id: t.id, inventory_id: dRow(t.store_id, l.item_key).id, qty_required: +l.qty })); });
